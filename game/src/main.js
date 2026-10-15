@@ -3,6 +3,7 @@ import './style.css';
 import { createPlayer } from './components/Player.js';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
+import { initInput, updateMovement } from './components/Movement.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -29,6 +30,8 @@ player.add(camera);
 
 const renderer = createRenderer();
 
+initInput();
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -36,5 +39,6 @@ window.addEventListener('resize', () => {
 });
 
 renderer.setAnimationLoop(() => {
+  updateMovement(player);
   renderer.render(scene, camera);
 });
