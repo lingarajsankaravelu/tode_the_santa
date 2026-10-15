@@ -22,6 +22,9 @@ export function createPlayer() {
     model.position.z = -box.min.z;
 
     player.add(model);
+    // Exposed so the movement code can rotate the model without turning the
+    // group (and with it the child camera).
+    player.model = model;
   });
 
   return player;
