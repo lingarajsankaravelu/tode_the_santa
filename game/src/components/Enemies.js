@@ -2,11 +2,8 @@ import * as THREE from 'three';
 import { createEnemy } from './Enemy.js';
 import { isPositionFree, wouldCollide } from './Collision.js';
 import { triggerGameOver } from './GameState.js';
+import { getDifficulty } from './Difficulty.js';
 
-// Seconds between spawns.
-const SPAWN_DELAY = 2;
-// World units travelled per frame while chasing the player.
-const ENEMY_SPEED = 1.5;
 // Half-width of the map: how far the corner spawn points sit from the origin.
 const SPAWN_DISTANCE = 220;
 // Extra turn applied to the model if enemy.glb does not face +Y by default.
@@ -62,14 +59,18 @@ export function clearEnemies(scene) {
   timeSinceLastSpawn = 0;
 
   // Throw away the time the Game Over screen was up, so the first enemy of
-  // the new run arrives a full SPAWN_DELAY later rather than instantly.
+  // the new run arrives a full spawn delay later rather than instantly.
   clock.getDelta();
 }
 
 export function updateEnemies(scene, player) {
+  // Spawn delay and speed are read fresh each frame, so a shrinking delay
+  // takes effect against the timer already running.
+  const { spawnDelay, enemySpeed } = getDifficulty();
+
   timeSinceLastSpawn += clock.getDelta();
 
-  if (timeSinceLastSpawn >= SPAWN_DELAY) {
+  if (timeSinceLastSpawn >= spawnDelay) {
     timeSinceLastSpawn = 0;
     spawnEnemy(scene);
   }
@@ -82,8 +83,8 @@ export function updateEnemies(scene, player) {
     if (distance === 0) return;
 
     // Where this frame's step towards the player would land.
-    const nextX = enemy.position.x + (toPlayerX / distance) * ENEMY_SPEED;
-    const nextY = enemy.position.y + (toPlayerY / distance) * ENEMY_SPEED;
+    const nextX = enemy.position.x + (toPlayerX / distance) * enemySpeed;
+    const nextY = enemy.position.y + (toPlayerY / distance) * enemySpeed;
 
     // Game Over outranks collision handling, so reaching Tode is no longer
     // something the enemy gets blocked out of -- it is the whole point of the

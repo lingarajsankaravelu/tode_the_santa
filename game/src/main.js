@@ -8,6 +8,7 @@ import { updateEnemies, enemies, clearEnemies } from './components/Enemies.js';
 import { initAttackInput, updateAttack } from './components/Attack.js';
 import { initScore, updateScore, resetScore } from './components/Score.js';
 import { initGameState, isGameOver } from './components/GameState.js';
+import { updateDifficulty } from './components/Difficulty.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -61,9 +62,14 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Primes the difficulty table before anything reads it.
+updateDifficulty();
+
 renderer.setAnimationLoop(() => {
   // Everything that moves or counts stands still once the run is over.
   if (!isGameOver()) {
+    // First, so every system this frame scales off the same score.
+    updateDifficulty();
     updateMovement(player, enemies);
     updateEnemies(scene, player);
     updateScore();

@@ -3,11 +3,8 @@ import { enemies, removeEnemy } from './Enemies.js';
 import { getCollisionRadius } from './Collision.js';
 import { addKillScore } from './Score.js';
 import { isGameOver } from './GameState.js';
+import { getDifficulty } from './Difficulty.js';
 
-// Seconds the player must wait between attacks.
-const ATTACK_COOLDOWN = 1;
-// How far from the player the attack reaches, in world units.
-const ATTACK_RADIUS = 60;
 // Seconds the flash stays on screen while fading out.
 const FLASH_DURATION = 0.25;
 // Lifts the flash just clear of the ground plane so it does not z-fight.
@@ -20,7 +17,9 @@ const clock = new THREE.Clock();
 // Flashes still fading out, each { mesh, elapsed }.
 const flashes = [];
 
-let timeSinceAttack = ATTACK_COOLDOWN;
+// Starts ready: the cooldown it has to clear is no longer a fixed constant,
+// so "long enough" is the only honest starting value.
+let timeSinceAttack = Infinity;
 let attackRequested = false;
 
 export function initAttackInput() {
@@ -36,9 +35,9 @@ export function initAttackInput() {
   });
 }
 
-function showFlash(scene, player) {
+function showFlash(scene, player, attackRadius) {
   // CircleGeometry already lies in the XY plane, which is this game's ground.
-  const geometry = new THREE.CircleGeometry(ATTACK_RADIUS, FLASH_SEGMENTS);
+  const geometry = new THREE.CircleGeometry(attackRadius, FLASH_SEGMENTS);
   const material = new THREE.MeshBasicMaterial({
     color: FLASH_COLOR,
     transparent: true,
@@ -54,7 +53,7 @@ function showFlash(scene, player) {
   flashes.push({ mesh, elapsed: 0 });
 }
 
-function strikeEnemies(scene, player) {
+function strikeEnemies(scene, player, attackRadius) {
   // Copied, because removeEnemy mutates the tracking array as we go.
   [...enemies].forEach((enemy) => {
     const distance = Math.hypot(
@@ -64,7 +63,7 @@ function strikeEnemies(scene, player) {
 
     // The enemy's own footprint counts, so one clipping the edge of the circle
     // still takes the hit.
-    if (distance <= ATTACK_RADIUS + getCollisionRadius(enemy)) {
+    if (distance <= attackRadius + getCollisionRadius(enemy)) {
       removeEnemy(scene, enemy);
       addKillScore();
     }
@@ -92,14 +91,17 @@ function updateFlashes(scene, delta) {
 }
 
 export function updateAttack(scene, player) {
+  const { attackCooldown, attackRadius } = getDifficulty();
   const delta = clock.getDelta();
 
   timeSinceAttack += delta;
 
-  if (attackRequested && timeSinceAttack >= ATTACK_COOLDOWN) {
+  if (attackRequested && timeSinceAttack >= attackCooldown) {
     timeSinceAttack = 0;
-    showFlash(scene, player);
-    strikeEnemies(scene, player);
+    // The flash is drawn at the current radius, so the growing reach is
+    // visible rather than something the player has to infer.
+    showFlash(scene, player, attackRadius);
+    strikeEnemies(scene, player, attackRadius);
   }
 
   // Presses during the cooldown are dropped rather than queued, so holding

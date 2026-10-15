@@ -1,10 +1,9 @@
 // Jump-based player movement: one arrow key press == one hop.
 import { isPositionFree, wouldCollide } from './Collision.js';
 import { isGameOver, triggerGameOver } from './GameState.js';
+import { getDifficulty } from './Difficulty.js';
 
 
-// Fraction of a hop completed per frame (1 / MOVE_SPEED frames per hop).
-const MOVE_SPEED = 0.04;
 // Peak height of the hop arc, in world units.
 const JUMP_HEIGHT = 25;
 // Ground distance covered by a single hop, in world units.
@@ -80,7 +79,11 @@ export function updateMovement(player, enemies = [], obstacles = []) {
 
   if (!currentMove || currentMove.completed) return;
 
-  currentMove.progress = Math.min(currentMove.progress + MOVE_SPEED, 1);
+  // Hop speed is read per frame, so a hop in flight can finish faster than
+  // it started. Harmless: progress only ever moves forward.
+  const { moveSpeed } = getDifficulty();
+
+  currentMove.progress = Math.min(currentMove.progress + moveSpeed, 1);
 
   const { direction, progress, startX, startY } = currentMove;
 
