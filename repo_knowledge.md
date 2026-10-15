@@ -59,7 +59,7 @@ tod_the_frog/
 ├── Introduction/             # lesson 1: Welcome, Working on the project
 ├── Skeleton/                 # lesson 2: Scene_setup → Player_movement → Adding_enemies
 │                             #           → Collision_detection → Attack
-├── Core_loop/                # lesson 3: Start_play_game_over → Score → Increasing_complexity
+├── Core_loop/                # lesson 3: Score → Start_play_game_over → Increasing_complexity
 ├── Visual/                   # lesson 4: Game_world
 ├── Conclusion/               # lesson 5: Summary
 │
@@ -116,11 +116,11 @@ Read the relevant `spec.md` verbatim before implementing — it carries exact co
 5. **Skeleton/Attack** — Space key with a cooldown constant (default 1s); yellow
    `CircleGeometry` + `MeshBasicMaterial` flash on the XY ground plane at `z = 0.25`; enemies
    inside the attack radius are removed from the scene and from the tracking array.
-6. **Core_loop/Start_play_game_over** — player↔enemy collision triggers Game Over (this check
+6. **Core_loop/Score** — `div.score` at the top of the screen; `SCORE_PER_SECOND` (0.1) and
+   `SCORE_PER_KILL` (10); `THREE.Clock`-driven; display floored.
+7. **Core_loop/Start_play_game_over** — player↔enemy collision triggers Game Over (this check
    takes priority over normal collision handling); `div.game-over` overlay; hide the player,
    freeze enemies, disable input; Space resets position, enemies, score, and overlay.
-7. **Core_loop/Score** — `div.score` at the top of the screen; `SCORE_PER_SECOND` (0.1) and
-   `SCORE_PER_KILL` (10); `THREE.Clock`-driven; display floored.
 8. **Core_loop/Increasing_complexity** — difficulty factor from current score via a growth-rate
    constant; scales spawn delay ↓, enemy speed ↑, player speed ↑ slightly, attack delay ↓,
    attack range ↑ slightly; enemy params scale *faster* than player params; recomputed per

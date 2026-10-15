@@ -2,3 +2,18 @@ body {
   margin: 0;
   overflow: hidden;
 }
+
+.score {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  /* Purely a readout: never steal clicks from the canvas. */
+  pointer-events: none;
+  user-select: none;
+}

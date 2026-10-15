@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { enemies, removeEnemy } from './Enemies.js';
 import { getCollisionRadius } from './Collision.js';
+import { addKillScore } from './Score.js';
 
 // Seconds the player must wait between attacks.
 const ATTACK_COOLDOWN = 1;
@@ -61,6 +62,7 @@ function strikeEnemies(scene, player) {
     // still takes the hit.
     if (distance <= ATTACK_RADIUS + getCollisionRadius(enemy)) {
       removeEnemy(scene, enemy);
+      addKillScore();
     }
   });
 }
