@@ -42,19 +42,24 @@ export function getCollisionRadius(entity) {
 }
 
 /**
+ * True when `entity` standing at (x, y) would be touching `other`.
+ *
+ * Used on its own for the Game Over test, where contact is the event rather
+ * than something to be prevented.
+ */
+export function wouldCollide(entity, x, y, other) {
+  const clearance =
+    getCollisionRadius(entity) + getCollisionRadius(other) + MIN_COLLISION_DISTANCE;
+  const distance = Math.hypot(other.position.x - x, other.position.y - y);
+
+  return distance < clearance;
+}
+
+/**
  * True when `entity` standing at (x, y) would keep clear of every entity in
  * `others`. The entity itself is skipped, so the caller can pass a list that
  * contains it.
  */
 export function isPositionFree(entity, x, y, others) {
-  const radius = getCollisionRadius(entity);
-
-  return others.every((other) => {
-    if (other === entity) return true;
-
-    const clearance = radius + getCollisionRadius(other) + MIN_COLLISION_DISTANCE;
-    const distance = Math.hypot(other.position.x - x, other.position.y - y);
-
-    return distance >= clearance;
-  });
+  return others.every((other) => other === entity || !wouldCollide(entity, x, y, other));
 }
