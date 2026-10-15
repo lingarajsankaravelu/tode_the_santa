@@ -17,3 +17,35 @@ body {
   pointer-events: none;
   user-select: none;
 }
+
+.game-over {
+  /* Kept in the DOM and toggled, so the overlay costs nothing to show again. */
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  font-family: system-ui, sans-serif;
+  color: #ffffff;
+  text-align: center;
+  user-select: none;
+}
+
+.game-over.visible {
+  display: flex;
+}
+
+.game-over h1 {
+  margin: 0;
+  font-size: 72px;
+  letter-spacing: 2px;
+}
+
+.game-over p {
+  margin: 0;
+  font-size: 24px;
+  opacity: 0.85;
+}

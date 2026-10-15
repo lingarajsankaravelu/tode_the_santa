@@ -1,5 +1,6 @@
 // Jump-based player movement: one arrow key press == one hop.
-import { isPositionFree } from './Collision.js';
+import { isPositionFree, wouldCollide } from './Collision.js';
+import { isGameOver, triggerGameOver } from './GameState.js';
 
 
 // Fraction of a hop completed per frame (1 / MOVE_SPEED frames per hop).
@@ -26,7 +27,7 @@ let currentMove = null;
 
 export function initInput() {
   window.addEventListener('keydown', (event) => {
-    if (!DIRECTIONS[event.key]) return;
+    if (!DIRECTIONS[event.key] || isGameOver()) return;
 
     event.preventDefault();
     inputQueue.push(event.key);
@@ -57,7 +58,22 @@ function cancelMove(player) {
   player.position.z = 0;
 }
 
-export function updateMovement(player, obstacles = []) {
+/**
+ * Puts Tode back at the origin, facing forward, with any queued or in-flight
+ * hop thrown away. Called on restart.
+ */
+export function resetMovement(player) {
+  inputQueue.length = 0;
+  currentMove = null;
+
+  player.position.set(0, 0, 0);
+
+  if (player.model) {
+    player.model.rotation.y = MODEL_BASE_ROTATION;
+  }
+}
+
+export function updateMovement(player, enemies = [], obstacles = []) {
   if (!currentMove && inputQueue.length > 0) {
     startMove(player, inputQueue.shift());
   }
@@ -72,9 +88,16 @@ export function updateMovement(player, obstacles = []) {
   const nextX = startX + direction.x * JUMP_DISTANCE * progress;
   const nextY = startY + direction.y * JUMP_DISTANCE * progress;
 
-  // Only commit the position once it is known to be collision-free. A blocked
+  // Game Over outranks collision handling: hopping into a monster ends the
+  // run, rather than the hop being politely refused.
+  if (enemies.some((enemy) => wouldCollide(player, nextX, nextY, enemy))) {
+    triggerGameOver();
+    return;
+  }
+
+  // Everything else -- scenery and the like -- still just blocks. A blocked
   // hop is abandoned rather than paused, so Tode lands where he is instead of
-  // hanging in mid-air against a wall of monsters.
+  // hanging in mid-air against a wall.
   if (!isPositionFree(player, nextX, nextY, obstacles)) {
     cancelMove(player);
     return;

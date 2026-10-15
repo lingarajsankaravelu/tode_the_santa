@@ -3,10 +3,11 @@ import './style.css';
 import { createPlayer } from './components/Player.js';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
-import { initInput, updateMovement } from './components/Movement.js';
-import { updateEnemies, enemies } from './components/Enemies.js';
+import { initInput, updateMovement, resetMovement } from './components/Movement.js';
+import { updateEnemies, enemies, clearEnemies } from './components/Enemies.js';
 import { initAttackInput, updateAttack } from './components/Attack.js';
-import { initScore, updateScore } from './components/Score.js';
+import { initScore, updateScore, resetScore } from './components/Score.js';
+import { initGameState, isGameOver } from './components/GameState.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -37,6 +38,23 @@ initInput();
 initAttackInput();
 initScore();
 
+// Hiding the model rather than the group: the camera is a child of the group,
+// and there is no need to find out how a renderer feels about an invisible
+// one.
+function setPlayerVisible(visible) {
+  if (player.model) player.model.visible = visible;
+}
+
+initGameState({
+  onGameOver: () => setPlayerVisible(false),
+  onRestart: () => {
+    resetMovement(player);
+    clearEnemies(scene);
+    resetScore();
+    setPlayerVisible(true);
+  },
+});
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -44,9 +62,16 @@ window.addEventListener('resize', () => {
 });
 
 renderer.setAnimationLoop(() => {
-  updateMovement(player, enemies);
-  updateEnemies(scene, player);
+  // Everything that moves or counts stands still once the run is over.
+  if (!isGameOver()) {
+    updateMovement(player, enemies);
+    updateEnemies(scene, player);
+    updateScore();
+  }
+
+  // Kept outside the freeze so a flash caught mid-fade finishes cleanly
+  // instead of hanging on screen. It refuses new attacks on its own.
   updateAttack(scene, player);
-  updateScore();
+
   renderer.render(scene, camera);
 });

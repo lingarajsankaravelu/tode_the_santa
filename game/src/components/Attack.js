@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { enemies, removeEnemy } from './Enemies.js';
 import { getCollisionRadius } from './Collision.js';
 import { addKillScore } from './Score.js';
+import { isGameOver } from './GameState.js';
 
 // Seconds the player must wait between attacks.
 const ATTACK_COOLDOWN = 1;
@@ -24,7 +25,10 @@ let attackRequested = false;
 
 export function initAttackInput() {
   window.addEventListener('keydown', (event) => {
-    if (event.code !== 'Space') return;
+    // Once the run is over, Space belongs to the restart instead. Bailing
+    // here rather than at the cooldown check keeps the restart press from
+    // being banked and fired as an attack on the first frame of the new run.
+    if (event.code !== 'Space' || isGameOver()) return;
 
     // Stop the page scrolling out from under the canvas.
     event.preventDefault();
