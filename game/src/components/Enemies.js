@@ -63,7 +63,7 @@ export function clearEnemies(scene) {
   clock.getDelta();
 }
 
-export function updateEnemies(scene, player) {
+export function updateEnemies(scene, player, obstacles = []) {
   // Spawn delay and speed are read fresh each frame, so a shrinking delay
   // takes effect against the timer already running.
   const { spawnDelay, enemySpeed } = getDifficulty();
@@ -95,11 +95,26 @@ export function updateEnemies(scene, player) {
       return;
     }
 
-    // Each other, though, they still respect: blocked enemies hold position
-    // but keep turning, so a crowd stacks up instead of merging into one.
-    if (isPositionFree(enemy, nextX, nextY, enemies)) {
-      enemy.position.x = nextX;
-      enemy.position.y = nextY;
+    // Each other and the scenery, though, they still respect. Candidate steps
+    // in order of preference: straight at the player, then each axis on its
+    // own. The single-axis ones are what let a monster scrape along a wall and
+    // round the corner of a house -- without them it would walk into the near
+    // side and push at it for the rest of the run, since nothing here does
+    // pathfinding. A blocked enemy holds position but keeps turning, so a
+    // crowd stacks up instead of merging into one.
+    const steps = [
+      [nextX, nextY],
+      [nextX, enemy.position.y],
+      [enemy.position.x, nextY],
+    ];
+
+    const step = steps.find(
+      ([x, y]) =>
+        isPositionFree(enemy, x, y, enemies) && isPositionFree(enemy, x, y, obstacles),
+    );
+
+    if (step) {
+      [enemy.position.x, enemy.position.y] = step;
     }
 
     // Face the player. With rotation.x = PI/2 the model's local Y axis is

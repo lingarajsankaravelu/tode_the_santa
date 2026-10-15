@@ -9,6 +9,8 @@ import { initAttackInput, updateAttack } from './components/Attack.js';
 import { initScore, updateScore, resetScore } from './components/Score.js';
 import { initGameState, isGameOver } from './components/GameState.js';
 import { updateDifficulty } from './components/Difficulty.js';
+import { createMap } from './components/Map.js';
+import { createHouses, houses } from './components/House.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -26,6 +28,13 @@ directionalLight.position.set(
   DIRECTIONAL_LIGHT_POSITION.z,
 );
 scene.add(directionalLight);
+
+// Added before the player so the floor is the first thing in the scene; the
+// houses are parented to the map group rather than the scene, so the scenery
+// travels with the ground it sits on.
+const map = createMap();
+scene.add(map);
+createHouses(map);
 
 const player = createPlayer();
 scene.add(player);
@@ -70,8 +79,8 @@ renderer.setAnimationLoop(() => {
   if (!isGameOver()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
-    updateMovement(player, enemies);
-    updateEnemies(scene, player);
+    updateMovement(player, enemies, houses);
+    updateEnemies(scene, player, houses);
     updateScore();
   }
 
