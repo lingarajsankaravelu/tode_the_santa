@@ -37,6 +37,18 @@ function spawnEnemy(scene) {
   enemies.push(enemy);
 }
 
+/**
+ * Takes an enemy out of the scene and out of the tracking array. Safe to call
+ * with an enemy that has already been removed.
+ */
+export function removeEnemy(scene, enemy) {
+  const index = enemies.indexOf(enemy);
+
+  if (index !== -1) enemies.splice(index, 1);
+
+  scene.remove(enemy);
+}
+
 export function updateEnemies(scene, player) {
   timeSinceLastSpawn += clock.getDelta();
 
