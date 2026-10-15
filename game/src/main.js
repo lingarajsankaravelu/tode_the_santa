@@ -5,6 +5,7 @@ import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { initInput, updateMovement } from './components/Movement.js';
 import { updateEnemies, enemies } from './components/Enemies.js';
+import { initAttackInput, updateAttack } from './components/Attack.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -32,6 +33,7 @@ player.add(camera);
 const renderer = createRenderer();
 
 initInput();
+initAttackInput();
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -42,5 +44,6 @@ window.addEventListener('resize', () => {
 renderer.setAnimationLoop(() => {
   updateMovement(player, enemies);
   updateEnemies(scene, player);
+  updateAttack(scene, player);
   renderer.render(scene, camera);
 });

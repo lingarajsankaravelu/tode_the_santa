@@ -1,0 +1,104 @@
+import * as THREE from 'three';
+import { enemies, removeEnemy } from './Enemies.js';
+import { getCollisionRadius } from './Collision.js';
+
+// Seconds the player must wait between attacks.
+const ATTACK_COOLDOWN = 1;
+// How far from the player the attack reaches, in world units.
+const ATTACK_RADIUS = 60;
+// Seconds the flash stays on screen while fading out.
+const FLASH_DURATION = 0.25;
+// Lifts the flash just clear of the ground plane so it does not z-fight.
+const FLASH_Z = 0.25;
+const FLASH_SEGMENTS = 48;
+const FLASH_COLOR = 0xffff00;
+
+const clock = new THREE.Clock();
+
+// Flashes still fading out, each { mesh, elapsed }.
+const flashes = [];
+
+let timeSinceAttack = ATTACK_COOLDOWN;
+let attackRequested = false;
+
+export function initAttackInput() {
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space') return;
+
+    // Stop the page scrolling out from under the canvas.
+    event.preventDefault();
+    attackRequested = true;
+  });
+}
+
+function showFlash(scene, player) {
+  // CircleGeometry already lies in the XY plane, which is this game's ground.
+  const geometry = new THREE.CircleGeometry(ATTACK_RADIUS, FLASH_SEGMENTS);
+  const material = new THREE.MeshBasicMaterial({
+    color: FLASH_COLOR,
+    transparent: true,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+
+  // Pinned where the attack landed rather than parented to the player, so a
+  // hop mid-flash does not drag the circle along with it.
+  mesh.position.set(player.position.x, player.position.y, FLASH_Z);
+
+  scene.add(mesh);
+  flashes.push({ mesh, elapsed: 0 });
+}
+
+function strikeEnemies(scene, player) {
+  // Copied, because removeEnemy mutates the tracking array as we go.
+  [...enemies].forEach((enemy) => {
+    const distance = Math.hypot(
+      enemy.position.x - player.position.x,
+      enemy.position.y - player.position.y,
+    );
+
+    // The enemy's own footprint counts, so one clipping the edge of the circle
+    // still takes the hit.
+    if (distance <= ATTACK_RADIUS + getCollisionRadius(enemy)) {
+      removeEnemy(scene, enemy);
+    }
+  });
+}
+
+function updateFlashes(scene, delta) {
+  for (let i = flashes.length - 1; i >= 0; i -= 1) {
+    const flash = flashes[i];
+
+    flash.elapsed += delta;
+
+    const remaining = 1 - flash.elapsed / FLASH_DURATION;
+
+    if (remaining <= 0) {
+      scene.remove(flash.mesh);
+      flash.mesh.geometry.dispose();
+      flash.mesh.material.dispose();
+      flashes.splice(i, 1);
+      continue;
+    }
+
+    flash.mesh.material.opacity = remaining;
+  }
+}
+
+export function updateAttack(scene, player) {
+  const delta = clock.getDelta();
+
+  timeSinceAttack += delta;
+
+  if (attackRequested && timeSinceAttack >= ATTACK_COOLDOWN) {
+    timeSinceAttack = 0;
+    showFlash(scene, player);
+    strikeEnemies(scene, player);
+  }
+
+  // Presses during the cooldown are dropped rather than queued, so holding
+  // Space cannot bank a volley of attacks.
+  attackRequested = false;
+
+  updateFlashes(scene, delta);
+}
