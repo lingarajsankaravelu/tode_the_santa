@@ -4,7 +4,7 @@ import { createPlayer } from './components/Player.js';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { initInput, updateMovement } from './components/Movement.js';
-import { updateEnemies } from './components/Enemies.js';
+import { updateEnemies, enemies } from './components/Enemies.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -40,7 +40,7 @@ window.addEventListener('resize', () => {
 });
 
 renderer.setAnimationLoop(() => {
-  updateMovement(player);
+  updateMovement(player, enemies);
   updateEnemies(scene, player);
   renderer.render(scene, camera);
 });

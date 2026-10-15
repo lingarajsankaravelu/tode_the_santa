@@ -1,4 +1,6 @@
 // Jump-based player movement: one arrow key press == one hop.
+import { isPositionFree } from './Collision.js';
+
 
 // Fraction of a hop completed per frame (1 / MOVE_SPEED frames per hop).
 const MOVE_SPEED = 0.04;
@@ -49,7 +51,13 @@ function startMove(player, key) {
   }
 }
 
-export function updateMovement(player) {
+function cancelMove(player) {
+  currentMove.completed = true;
+  currentMove = null;
+  player.position.z = 0;
+}
+
+export function updateMovement(player, obstacles = []) {
   if (!currentMove && inputQueue.length > 0) {
     startMove(player, inputQueue.shift());
   }
@@ -60,13 +68,23 @@ export function updateMovement(player) {
 
   const { direction, progress, startX, startY } = currentMove;
 
-  player.position.x = startX + direction.x * JUMP_DISTANCE * progress;
-  player.position.y = startY + direction.y * JUMP_DISTANCE * progress;
+  // Where this frame of the hop wants to put the player.
+  const nextX = startX + direction.x * JUMP_DISTANCE * progress;
+  const nextY = startY + direction.y * JUMP_DISTANCE * progress;
+
+  // Only commit the position once it is known to be collision-free. A blocked
+  // hop is abandoned rather than paused, so Tode lands where he is instead of
+  // hanging in mid-air against a wall of monsters.
+  if (!isPositionFree(player, nextX, nextY, obstacles)) {
+    cancelMove(player);
+    return;
+  }
+
+  player.position.x = nextX;
+  player.position.y = nextY;
   player.position.z = Math.sin(progress * Math.PI) * JUMP_HEIGHT;
 
   if (progress >= 1) {
-    currentMove.completed = true;
-    player.position.z = 0;
-    currentMove = null;
+    cancelMove(player);
   }
 }
