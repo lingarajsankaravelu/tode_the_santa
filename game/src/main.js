@@ -12,6 +12,7 @@ import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
+import { initMusic } from './components/Music.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -54,6 +55,9 @@ const renderer = createRenderer();
 initInput();
 initAttackInput();
 initScore();
+// Nothing to update per frame: the element loops itself, and it carries on
+// across a Game Over the same way the snow and the lights do.
+initMusic();
 
 // Hiding the model rather than the group: the camera is a child of the group,
 // and there is no need to find out how a renderer feels about an invisible

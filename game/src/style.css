@@ -69,3 +69,26 @@ body {
 .god-mode.visible {
   display: block;
 }
+
+.music-muted {
+  /* Sits under the god-mode badge in the same corner, styled to match it, so
+     the two read as one row of status rather than two inventions. Shown only
+     while muted: music playing is the default and needs no label. */
+  position: fixed;
+  top: 44px;
+  left: 12px;
+  display: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #9fd4ff;
+  user-select: none;
+  pointer-events: none;
+}
+
+.music-muted.visible {
+  display: block;
+}
