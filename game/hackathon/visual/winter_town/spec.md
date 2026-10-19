@@ -1,0 +1,193 @@
+### Specification for AI agent: Winter town
+
+Replaces the three scattered cottages with a five-house town on the far side of the
+field, between the play area and the river.
+
+This is the first task driven by `game_story.md` rather than by the course: Tode is
+Santa, and the story ends with him delivering a present to each of five houses. Five
+houses that stay where they are is the thing the delivery task will need, and three
+cottages landing somewhere different on every reload is the thing it cannot use. So
+this task is about *identity* as much as scenery — the town is a place, with five
+addresses.
+
+The model is `/models/winter_country_house.glb`.
+
+#### What the model actually is
+
+It is not a house. It is a 5.75 MB Sketchfab diorama: 1,441 nodes, 679 meshes,
+124,005 triangles and 31 materials. Read that before writing any code, because
+dropping it in whole is wrong in three separate ways.
+
+One piece of good news first: it carries **no image textures at all**. Every material
+is flat colour, which is exactly the look `river_landscape.glb` has, so the two sit
+together with no style clash and nothing to load alongside the `.glb`.
+
+Measured per top-level group, in the model's own units (the `.glb` is Y-up):
+
+| Group | Size (X × Y × Z) | Triangles | Centre | What to do |
+|---|---|---|---|---|
+| `House` | 14.6 × 10.85 × 10.1 | 36,604 | (0.1, 1.9, 0.8) | keep — the building |
+| `Trees1` | 18.7 × 9.2 × 20.3 | 5,574 | (8.9, 2.8, 9.7) | keep as-is |
+| `SnowMan` | 16.2 × 4.7 × 43.0 | 5,182 | (6.7, 1.1, 19.8) | keep, pull in |
+| `Kolodec` (a well) | 57.4 × 14.2 × 119.0 | 6,888 | (−13.0, −0.2, −58.2) | keep, pull in |
+| `Ground` | 31.7 × 6.7 × 43.2 | 27,595 | — | **discard** |
+| `Snow` | 25.3 × 6.2 × 21.0 | 29,760 | — | **discard** |
+| `Brigde`, `Smoke`, `Fishes`, `Sanki`, `Sanki1`, `Shovel`, `Shovel1`, `Shovel2` | — | ~12,400 | — | **discard** |
+| `ambientLight1`, `directionalLight1` | — | 0 | — | empty nodes; `GLTFLoader` ignores them |
+
+- **`Ground` must be discarded, not hidden.** It is a 31.7 × 43.2 ground patch, and
+  the landscape already provides the ground. Two ground surfaces at the same height
+  is the coplanar case `GROUND_Z = -0.05` in `Landscape.js` exists to avoid; five of
+  them would shimmer across the whole town.
+- **`Snow` is 24% of the file** on its own and is a snow layer for the discarded
+  ground. The `snowfall` task provides falling snow; this is not that.
+- **The props are scattered across the plot, not arranged on it.** `Kolodec` sits 58
+  units from the house — nearly six house-depths away — because the original diorama
+  is a wide scene. Left alone, each plot's well would land in the next plot's garden.
+
+Keeping only the four wanted groups takes a house from 124,005 triangles to **54,248**,
+so five of them cost 271,240 rather than 620,025.
+
+#### Model handling
+
+In `House.js` — the file keeps its name, its exported `houses` array and its job as
+the obstacle list that `Movement.js` and `Enemies.js` test against. Everything else in
+it changes.
+
+- Change `MODEL_PATH` to `/models/winter_country_house.glb`.
+- Load it once and `clone()` per house. The model has no skins and no animations,
+  which is the case `clone()` handles cleanly — the same reason the old
+  `small_house.glb` could be cloned and `enemy.glb` cannot.
+- Pull the four wanted groups out by name with `getObjectByName` and add only those to
+  the house group. Do not load the scene and remove the unwanted parts; name the four
+  you want, so a future version of the asset with extra props does not quietly start
+  shipping them.
+- Set `MODEL_SCALE = 7.4`.
+
+  The `House` group is 10.85 model units tall, so 7.4 puts it at **80.3 world units** —
+  the height `small_house.glb` had at its own scale of 65. That number is the anchor
+  everything else in the project is sized against: `river_landscape/spec.md` works out
+  that an 80-unit house reads as an 18 ft cottage, which makes one world unit about
+  2.7 inches, Tode 2.3 ft tall and one hop 18 ft. Matching it means this task changes
+  the architecture and nothing else about the game's sense of scale.
+
+  The footprint does grow: **108.0 wide × 74.7 deep**, against the cottage's 58 × 54.
+  That is correct — this is a country house with a porch, not a hut — but it is what
+  drives the placement arithmetic below, so changing the scale means redoing it.
+- Keep `model.rotation.x = Math.PI / 2`. Z is up in this game and the `.glb` is Y-up,
+  the same quarter turn every other loaded model gets.
+- Keep the existing measure-then-lift grounding (`box.min.z` from a `Box3` taken after
+  the rotations, then `model.position.z = -box.min.z`). It matters more here than it
+  did before: the `House` group's lowest point is at model `y = −3.48`, so its
+  foundation sits well below the model origin and a house placed at `z = 0` without
+  the lift would float.
+- Reposition the two strays, in model units, before scaling:
+  - `SnowMan` from `z = 19.8` to `z ≈ 11` — about 81 world units from the house, so it
+    reads as standing in the front garden.
+  - `Kolodec` from `(−13.0, −58.2)` to `(−13, −12)` — about 96 × 89 world units off the
+    house corner, which is a well at the side of the property.
+  - `Trees1` is already beside the house at (8.9, 9.7) — 66 × 72 world units out — and
+    moves only if it visibly clips the building.
+
+#### Collision measures the building, not the plot
+
+This is the instruction most likely to be got wrong, and it is the one that decides
+whether the town is playable.
+
+`Collision.js` derives a circular footprint from `entity.model` by averaging its ground
+extents, and it reads that property off the group. The existing `createHouse` sets
+`house.model = model` for exactly this reason. If `house.model` is left pointing at the
+whole plot, the footprint becomes a circle of radius ~92 covering the trees, the well
+and the snowman, and Tode cannot walk through a garden — each plot becomes a solid
+disc nearly a hundred units across.
+
+- Set `house.model` to the extracted **`House` group alone**.
+- Add `Trees1`, `SnowMan` and `Kolodec` to the house group as siblings of it, so they
+  are drawn and moved with the house but take no part in collision.
+
+The radius is then `(108.0 + 74.7) / 4 = 45.7`, which blocks the building and leaves
+the garden walkable. Walking through a snowman is a much smaller lie than a hundred-unit
+invisible wall around every house.
+
+`Collision.js` itself is not touched.
+
+#### Placement: an arc, not a scatter
+
+Delete `findPlacement`, `randomCoordinate`, `PLACEMENT_RANGE`, `ORIGIN_CLEARANCE` and
+`MAX_PLACEMENT_ATTEMPTS`. Random placement with a rejection loop was right for three
+anonymous cottages; it is wrong for a town, and wrong for five delivery targets that
+have to be in the same place on every run.
+
+- `HOUSE_COUNT = 5`
+- `TOWN_RADIUS = 480` — distance from the origin to each house centre.
+- `TOWN_SPREAD = 110` degrees, centred on **+X**, with the five houses at equal
+  angular steps across it: −55°, −27.5°, 0°, +27.5°, +55°.
+- Yaw each house to face the origin, from `Math.atan2` on its own position, so the
+  fronts look onto the field. This replaces the old random quarter-turn, which existed
+  only to stop three identical cottages facing the same way; here the houses facing the
+  same place *is* the point.
+
+Every one of those numbers is forced by something, and the spec states which:
+
+- **Why +X.** The river is on that side. `riverX(z) = 30.5 + …` in
+  `game/tools/generate_river_landscape.mjs` puts the channel centre at model x ≈ 30.5,
+  which at `Landscape.js`'s `MODEL_SCALE = 41` is **1251 world units**, with the
+  nearest water vertex at **1091**. So the town faces the water across the fields and
+  the river sits behind it from the camera's usual angle.
+
+  Note the river cannot be reached, and the town cannot be put on its bank.
+  `WORLD_RADIUS` in `Movement.js` is **700** and the nearest water is at 1091. Moving
+  the channel inward would break the flat-basin guarantee the landscape depends on, and
+  raising the world bound would let Tode hop into the hills at `z = 0` with the ground
+  through his waist. A town *between* the field and the river is the version that works.
+
+  (`visual/river_landscape/spec.md` states the river is "about 2657 world units out".
+  That figure is stale — it was computed when `MODEL_SCALE` was 100. At 41 it is 1091.)
+- **Why 480.** The plot reaches about 100 units beyond the house centre once the well
+  and trees are counted, so the town's outer edge lands at 580 — inside `WORLD_RADIUS`
+  of 700 with room to spare, which it must be, or Tode is stopped by the invisible
+  world edge before he reaches the front doors. It also puts the nearest wall 443 units
+  from his start, far enough that the town is somewhere he travels to rather than
+  something he begins inside.
+- **Why 110° across five houses.** That is 922 units of frontage and a 27.5° step,
+  which puts adjacent house centres **228.2** units apart. Two houses need
+  `45.7 + 45.7 + MIN_COLLISION_DISTANCE(8) = 99.4` between them, so the arc clears it
+  more than twice over and needs no rejection loop at all. The geometry replaces the
+  retry logic rather than hiding it.
+- **Why it is safe from the spawn corners.** Enemies spawn at the four `(±220, ±220)`
+  points. The outermost house sits at (275, 393), which is **181.8** units from the
+  nearest of them, against a required clearance of `45.7 + 7.9 + 8 = 61.6`. No monster
+  can materialise inside a wall and spend the run shoving at it — the thing
+  `PLACEMENT_RANGE = 170` was protecting against, now guaranteed by arithmetic.
+
+One unknown the implementing agent must check rather than assume: **which way the house
+model faces at yaw 0 is not established.** If the fronts come out facing away from the
+field, add a `MODEL_BASE_ROTATION` constant and fold it into the yaw — the same idiom
+`Movement.js` and `Enemies.js` already use for Tode and the monsters. Do not fix it by
+rotating the group, which is a different thing from rotating the model.
+
+#### Constraints
+
+- **`small_house.glb` is retired, not deleted.** It is still referenced by
+  `repo_knowledge.md` and by the original `Visual/Game_world` course spec, and the
+  course files are not ours to edit.
+- **Watch the triangle count.** 271,240 triangles of town against the landscape's
+  24,982 makes these five houses, by a wide margin, the heaviest things in the scene.
+  If the `atmosphere` task's shadows are also applied they are also the heaviest shadow
+  casters. If the frame rate suffers, drop `Kolodec` from the kept groups first — it is
+  6,888 triangles for a well that is mostly hidden behind the house — and `Trees1`
+  second. Do not solve it by lowering `MODEL_SCALE`, which would break the scale anchor.
+- **This task does not implement delivery.** It builds a town with five stable
+  addresses and leaves `houses` exported in the order the arc was walked, which is what
+  `gift_delivery` will index into. No gift, no carrying, no per-house state here.
+- The enemies still spawn and still chase. Whether monsters belong in the Santa story
+  at all is a question for the story, not for this task, and nothing here forecloses
+  removing them later.
+
+#### Research
+
+Five houses in a neat arc is a compromise forced by the flat basin: a real town would
+have a road through it, and a road implies the hills and the river bank are reachable,
+which the planar movement model currently rules out. The open question from
+`river_landscape/spec.md` — whether `Movement.js` could sample terrain height — is the
+same question here, and answering it would turn this arc into a village with a street.
