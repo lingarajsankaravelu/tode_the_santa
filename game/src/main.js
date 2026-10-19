@@ -11,6 +11,7 @@ import { initGameState, isGameOver } from './components/GameState.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
+import { createSnow, updateSnow } from './components/Snow.js';
 
 const AMBIENT_LIGHT_INTENSITY = 1.5;
 const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
@@ -41,6 +42,12 @@ scene.add(player);
 
 const camera = createCamera();
 player.add(camera);
+
+// Snow hangs off the scene next to the lights rather than off the map group
+// the ground scenery uses. Created after the player because updateSnow needs
+// him to follow.
+const snow = createSnow();
+scene.add(snow);
 
 const renderer = createRenderer();
 
@@ -87,6 +94,10 @@ renderer.setAnimationLoop(() => {
   // Kept outside the freeze so a flash caught mid-fade finishes cleanly
   // instead of hanging on screen. It refuses new attacks on its own.
   updateAttack(scene, player);
+
+  // Also outside it: the snow carries on over the Game Over screen, the
+  // same way the lighting stays up rather than cutting to black.
+  updateSnow(snow, player);
 
   renderer.render(scene, camera);
 });

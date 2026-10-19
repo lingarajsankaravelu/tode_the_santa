@@ -100,6 +100,9 @@ export function updateMovement(player, enemies = [], obstacles = []) {
   // the rim should not get to kill him on a hop that was never going to
   // happen. A hop into the edge of the world fails exactly like a hop into a
   // house, so it reads as the same rule rather than a new one.
+  // Always, god mode included. The ground past the basin is not level and
+  // Tode stays at z = 0, so leaving it puts him inside a hillside -- which
+  // looks like falling through the map, because that is what it is.
   if (Math.hypot(nextX, nextY) > WORLD_RADIUS) {
     cancelMove(player);
     return;
