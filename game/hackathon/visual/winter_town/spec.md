@@ -210,11 +210,15 @@ Every one of those numbers is forced by something, and the spec states which:
   can materialise inside a wall and spend the run shoving at it — the thing
   `PLACEMENT_RANGE = 170` was protecting against, now guaranteed by arithmetic.
 
-One unknown the implementing agent must check rather than assume: **which way the house
-model faces at yaw 0 is not established.** If the fronts come out facing away from the
-field, add a `MODEL_BASE_ROTATION` constant and fold it into the yaw — the same idiom
-`Movement.js` and `Enemies.js` already use for Tode and the monsters. Do not fix it by
-rotating the group, which is a different thing from rotating the model.
+**The model faces −Y at a yaw of 0**, not +Y like `tode.glb` and `enemy.glb`. So every
+house needs `MODEL_BASE_ROTATION = Math.PI` folded into the facing above — the same
+idiom `Movement.js` and `Enemies.js` already use for Tode and the monsters. This was
+checked in the browser rather than assumed: at 0 the five fronts pointed out of the map
+and the town showed the field its back walls.
+
+Do not fix it by rotating the group. The group carries the house's position, so turning
+it swings the whole plot around the world origin instead of turning the house on its
+own spot.
 
 #### Constraints
 

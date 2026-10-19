@@ -81,10 +81,15 @@ const TOWN_SPREAD_DEGREES = 110;
 // bound would let Tode hop into the hills at z = 0 with the ground through his
 // waist. A town between the field and the river is the version that works.
 const TOWN_FACING = 0;
-// Extra turn if the house model does not face +Y at a yaw of zero. Same escape
-// hatch Movement.js and Enemies.js keep for Tode and the monsters; set it once
-// here rather than rotating the group, which would be a different thing.
-const MODEL_BASE_ROTATION = 0;
+// The house model faces -Y at a yaw of zero, not +Y like tode.glb and
+// enemy.glb, so every house needs half a turn on top of the facing worked out
+// below. Confirmed in the browser: at 0 the five fronts pointed out of the map
+// and the town presented its back walls to the field.
+//
+// Set here rather than by rotating the group, which is a different thing --
+// the group carries the house's position, and turning it would swing the plot
+// around the origin instead of turning the house on its own spot.
+const MODEL_BASE_ROTATION = Math.PI;
 // The diorama's own ground sits at model y = 0 -- the discarded Ground group
 // tops out at +0.52 -- so placing the plot at zero keeps every piece at the
 // height the artist put it, including the small amount the house foundation

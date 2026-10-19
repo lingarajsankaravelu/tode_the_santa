@@ -98,12 +98,14 @@ The five angles are `-55°, -27.5°, 0°, +27.5°, +55°`, the same series
 constants rather than writing the five numbers out, or the road and the houses
 will drift apart the first time the town is re-tuned.
 
-**One dependency to check before building the spurs.** Which way the house model
-faces at a yaw of zero is not established — `visual/winter_town` leaves
-`MODEL_BASE_ROTATION` as the escape hatch and says to confirm it in the browser.
-If the fronts turn out to face away from the field, the doors are on the far
-side and every spur meets a back wall. The connecting arc is correct either way,
-so build and look at that first, then add the spurs.
+**The dependency that blocked the spurs is now settled.** The house model faces
+**−Y** at a yaw of zero, so `visual/winter_town` carries
+`MODEL_BASE_ROTATION = Math.PI` and the fronts do look onto the field. The spurs
+can be built in the same pass as the arc, on the inward side of each house,
+with no further checking.
+
+Should that constant ever change, the spurs move with it — they sit on the door
+side, and the door side is what it defines.
 
 #### Wiring
 
