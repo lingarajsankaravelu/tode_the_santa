@@ -18,20 +18,35 @@ It is not a house. It is a 5.75 MB Sketchfab diorama: 1,441 nodes, 679 meshes,
 124,005 triangles and 31 materials. Read that before writing any code, because
 dropping it in whole is wrong in three separate ways.
 
-One piece of good news first: it carries **no image textures at all**. Every material
-is flat colour, which is exactly the look `river_landscape.glb` has, so the two sit
-together with no style clash and nothing to load alongside the `.glb`.
+It carries **no image textures at all** — every material is flat colour, which is
+exactly the look `river_landscape.glb` has, so the two sit together with no style
+clash and nothing to load alongside the `.glb`.
+
+**But the colours do not survive the loader as shipped.** All 31 materials keep their
+colour in `extensions.KHR_materials_pbrSpecularGlossiness.diffuseFactor`, none has a
+`baseColorFactor`, and the extension is listed in `extensionsRequired`. three.js
+removed support for that extension, so `GLTFLoader` falls back to a default
+metallic-roughness material — and the glTF default for `baseColorFactor` is opaque
+white. The whole diorama renders white, with every colour sitting unread in the file.
+
+Convert the asset once, offline, with `tools/convert_specular_glossiness.mjs`:
+`diffuseFactor` becomes `baseColorFactor`, `roughnessFactor` becomes
+`1 - glossinessFactor`, `metallicFactor` is pinned to 0 (the glTF default of 1 would
+render everything as a black mirror under this scene's two lights), and the extension
+comes out of the material and both extension lists. Every material in this model has
+`specularFactor [0,0,0]`, so nothing is lost in the mapping. Do not work around this
+at load time: the fix belongs in the asset, not the render path.
 
 Measured per top-level group, in the model's own units (the `.glb` is Y-up):
 
 | Group | Size (X × Y × Z) | Triangles | Centre | What to do |
 |---|---|---|---|---|
 | `House` | 14.6 × 10.85 × 10.1 | 36,604 | (0.1, 1.9, 0.8) | keep — the building |
-| `Trees1` | 18.7 × 9.2 × 20.3 | 5,574 | (8.9, 2.8, 9.7) | keep as-is |
-| `SnowMan` | 16.2 × 4.7 × 43.0 | 5,182 | (6.7, 1.1, 19.8) | keep, pull in |
-| `Kolodec` (a well) | 57.4 × 14.2 × 119.0 | 6,888 | (−13.0, −0.2, −58.2) | keep, pull in |
+| `Trees1` | 18.7 × 9.2 × 20.3 | 5,574 | (8.9, 2.8, 9.7) | keep, do **not** move |
+| `SnowMan` | 16.2 × 4.7 × 43.0 | 5,182 | (6.7, 1.1, 19.8) | keep **one child** — see below |
+| `Kolodec` (a well) | 57.4 × 14.2 × 119.0 | 6,888 | (−13.0, −0.2, −58.2) | keep **minus one child** — see below |
 | `Ground` | 31.7 × 6.7 × 43.2 | 27,595 | — | **discard** |
-| `Snow` | 25.3 × 6.2 × 21.0 | 29,760 | — | **discard** |
+| `Snow` | 25.3 × 6.2 × 21.0 | 29,760 | — | **keep** — lying snow, not ground |
 | `Brigde`, `Smoke`, `Fishes`, `Sanki`, `Sanki1`, `Shovel`, `Shovel1`, `Shovel2` | — | ~12,400 | — | **discard** |
 | `ambientLight1`, `directionalLight1` | — | 0 | — | empty nodes; `GLTFLoader` ignores them |
 
@@ -39,14 +54,34 @@ Measured per top-level group, in the model's own units (the `.glb` is Y-up):
   the landscape already provides the ground. Two ground surfaces at the same height
   is the coplanar case `GROUND_Z = -0.05` in `Landscape.js` exists to avoid; five of
   them would shimmer across the whole town.
-- **`Snow` is 24% of the file** on its own and is a snow layer for the discarded
-  ground. The `snowfall` task provides falling snow; this is not that.
+- **`Snow` is lying snow and must be kept.** The name invites the assumption that
+  it belongs to the discarded `Ground`; it does not. Every child sits above the
+  ground plane and uses the `Snow2` material: `Snow1` is 15.5 × 10.8 at roof
+  height, which is the house's own footprint, and the six `polySurface5xx`
+  children are caps on the trees and posts. It is 29,760 triangles, the single
+  largest kept piece, and it is also the entire winter character of the model —
+  without it this is a brown cabin standing in a Christmas scene. The `snowfall`
+  task provides *falling* snow, which is a different thing.
 - **The props are scattered across the plot, not arranged on it.** `Kolodec` sits 58
   units from the house — nearly six house-depths away — because the original diorama
   is a wide scene. Left alone, each plot's well would land in the next plot's garden.
+- **Two of the prop groups are misleading when measured whole**, and this matters more
+  than the scattering. Measure their children:
+  - `Kolodec`'s 119-unit span is almost entirely **one child, `pCylinder14`** —
+    42.7 × 14.2 × 118.6, centred 58 units off, 2,544 triangles. It is a pond or a path,
+    not part of the well. Drag it into every plot and the town gets a 878-unit slab
+    through it. **Exclude it by name.** What remains is a tidy well cluster at
+    (14.4, −1) of about 8.7 × 3 × 5.
+  - `SnowMan`'s actual snowman is **`polySurface538`** (2.9 × 4.7 × 2.8, 3,956
+    triangles), standing 39.9 units away. The group's other children are a bucket and
+    a couple of small plates near the diorama origin. **Take that one child**, not the
+    group.
 
-Keeping only the four wanted groups takes a house from 124,005 triangles to **54,248**,
-so five of them cost 271,240 rather than 620,025.
+  Pulling in a group *centre* is not enough for either of these — the centre is an
+  average over objects that do not belong together.
+
+Keeping only the wanted pieces takes a house from 124,005 triangles to **80,238**, so
+five of them cost 401,190 rather than 620,025.
 
 #### Model handling
 
@@ -76,18 +111,28 @@ it changes.
   drives the placement arithmetic below, so changing the scale means redoing it.
 - Keep `model.rotation.x = Math.PI / 2`. Z is up in this game and the `.glb` is Y-up,
   the same quarter turn every other loaded model gets.
-- Keep the existing measure-then-lift grounding (`box.min.z` from a `Box3` taken after
-  the rotations, then `model.position.z = -box.min.z`). It matters more here than it
-  did before: the `House` group's lowest point is at model `y = −3.48`, so its
-  foundation sits well below the model origin and a house placed at `z = 0` without
-  the lift would float.
+- **Do not use the measure-then-lift grounding** the old `createHouse` had
+  (`model.position.z = -box.min.z`). That is right for a single model and wrong for a
+  plot of several: the `House` group's lowest point is at model `y = −3.48`, so lifting
+  the plot by it would raise everything and leave the trees and the snowman floating
+  about 26 world units in the air.
+
+  Ground on the diorama's own ground plane instead, which is model `y = 0` — the
+  discarded `Ground` group tops out at `+0.52`. Place the plot at `z = 0` and every
+  piece keeps the height the artist gave it, including the small amount the house
+  foundation and the tree trunks are deliberately buried by. Keep it as a single
+  `PLOT_Z` constant so a town that looks sunk or floating is one number to fix.
 - Reposition the two strays, in model units, before scaling:
   - `SnowMan` from `z = 19.8` to `z ≈ 11` — about 81 world units from the house, so it
     reads as standing in the front garden.
   - `Kolodec` from `(−13.0, −58.2)` to `(−13, −12)` — about 96 × 89 world units off the
     house corner, which is a well at the side of the property.
-  - `Trees1` is already beside the house at (8.9, 9.7) — 66 × 72 world units out — and
-    moves only if it visibly clips the building.
+  - `Trees1` must **not** be moved, and this is the one offset that looks harmless and
+    is not. The snow sitting on these trees lives in the separate `Snow` group, not
+    inside `Trees1`, so nudging the trees walks them out from under their own caps and
+    leaves six white blobs hanging where they used to be. At (66, 72) world units from
+    the house they already read as beside it. The `Snow` group stays unmoved for the
+    same reason.
 
 #### Collision measures the building, not the plot
 
@@ -108,6 +153,11 @@ disc nearly a hundred units across.
 The radius is then `(108.0 + 74.7) / 4 = 45.7`, which blocks the building and leaves
 the garden walkable. Walking through a snowman is a much smaller lie than a hundred-unit
 invisible wall around every house.
+
+One wrinkle to state rather than discover: `Collision.js` measures an **axis-aligned**
+box, so a yawed house reads slightly larger. Across the arc the radius runs from 45.7
+for the house facing straight down −X to **63.6** for the two on the ends, yawed 35°.
+The spacing below is checked against the worst case, not the best.
 
 `Collision.js` itself is not touched.
 
@@ -150,10 +200,10 @@ Every one of those numbers is forced by something, and the spec states which:
   from his start, far enough that the town is somewhere he travels to rather than
   something he begins inside.
 - **Why 110° across five houses.** That is 922 units of frontage and a 27.5° step,
-  which puts adjacent house centres **228.2** units apart. Two houses need
-  `45.7 + 45.7 + MIN_COLLISION_DISTANCE(8) = 99.4` between them, so the arc clears it
-  more than twice over and needs no rejection loop at all. The geometry replaces the
-  retry logic rather than hiding it.
+  which puts adjacent house centres **228.2** units apart. The tightest pair needs
+  `63.6 + 61.6 + MIN_COLLISION_DISTANCE(8) = 133.2` between them, so the arc clears it
+  by 95 units and needs no rejection loop at all. The geometry replaces the retry logic
+  rather than hiding it.
 - **Why it is safe from the spawn corners.** Enemies spawn at the four `(±220, ±220)`
   points. The outermost house sits at (275, 393), which is **181.8** units from the
   nearest of them, against a required clearance of `45.7 + 7.9 + 8 = 61.6`. No monster
