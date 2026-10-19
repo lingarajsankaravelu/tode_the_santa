@@ -8,6 +8,11 @@ import { getDifficulty } from './Difficulty.js';
 const JUMP_HEIGHT = 25;
 // Ground distance covered by a single hop, in world units.
 const JUMP_DISTANCE = 80;
+// How far from the origin Tode may get. Matches the flat middle of
+// river_landscape.glb: FLAT_R of 17 in the generator, imported at a scale of
+// 41 in Landscape.js, which puts the first rising ground at 707. Past this he
+// would be standing inside a hill, so the hop is refused instead.
+const WORLD_RADIUS = 700;
 // Extra turn applied to the model if tode.glb does not face +Y by default.
 const MODEL_BASE_ROTATION = 0;
 
@@ -90,6 +95,15 @@ export function updateMovement(player, enemies = [], obstacles = []) {
   // Where this frame of the hop wants to put the player.
   const nextX = startX + direction.x * JUMP_DISTANCE * progress;
   const nextY = startY + direction.y * JUMP_DISTANCE * progress;
+
+  // Checked before the monsters, not after: an enemy that has chased Tode to
+  // the rim should not get to kill him on a hop that was never going to
+  // happen. A hop into the edge of the world fails exactly like a hop into a
+  // house, so it reads as the same rule rather than a new one.
+  if (Math.hypot(nextX, nextY) > WORLD_RADIUS) {
+    cancelMove(player);
+    return;
+  }
 
   // Game Over outranks collision handling: hopping into a monster ends the
   // run, rather than the hop being politely refused.

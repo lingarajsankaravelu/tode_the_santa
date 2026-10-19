@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 
-const FIELD_OF_VIEW = 30;
+// 45, not 30. The frustum has to reach the scenery: at 30 degrees, pitched
+// down onto Tode, the top edge of the view sat 20 degrees BELOW horizontal
+// and the furthest ground it could see was 388 units away -- so the hills,
+// the pines and the mountains were all outside it no matter where he stood.
+const FIELD_OF_VIEW = 45;
 const NEAR_PLANE = 0.1;
 const FAR_PLANE = 9000;
-const CAMERA_POSITION = { x: 300, y: -300, z: 300 };
+// Lower than it was, which buys reach twice over: a shallower pitch (26
+// degrees, down from 35) tips the frustum's top edge out towards the horizon,
+// and the shorter distance makes Tode bigger rather than smaller. Together
+// with the wider field of view the camera now sees about 2500 units out, past
+// the mountains at 1927.
+const CAMERA_POSITION = { x: 260, y: -260, z: 180 };
 
 export function createCamera() {
   const camera = new THREE.PerspectiveCamera(
