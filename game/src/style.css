@@ -49,3 +49,23 @@ body {
   font-size: 24px;
   opacity: 0.85;
 }
+
+.god-mode {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  display: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #ffd964;
+  user-select: none;
+  pointer-events: none;
+}
+
+.god-mode.visible {
+  display: block;
+}
