@@ -17,18 +17,21 @@ const FLAKE_OPACITY = 0.85;
 // way to build this -- is consequently invisible, because all of it sits in
 // the wedge above the frame.
 //
-// So the band hugs the ground near the player instead, and follows him (see
-// updateSnow). These numbers are a function of Camera.js: if the camera's
-// height, pitch or field of view change, recompute them or the snow silently
-// vanishes again.
-const INNER_RADIUS = 120;
-const OUTER_RADIUS = 900;
+// So the field hugs the ground around the player instead (see updateSnow).
+// These numbers are a function of Camera.js: if the camera's height, pitch or
+// field of view change, recompute them or the snow silently vanishes again.
+//
+// A square, not a ring, because the field wraps: a flake that falls more than
+// FIELD_HALF behind the player is teleported the full span forward, which is
+// only seamless on a shape that tiles.
+const FIELD_HALF = 900;
 // Headroom directly above the player, a little under the camera's own height.
 const CEILING_NEAR = 150;
 // How fast the frame's top edge drops as the ground recedes: tan(3.6 degrees).
 // A flake's ceiling is CEILING_NEAR minus this times its distance out, so the
-// whole band stays under the edge instead of being cropped beyond a few
-// hundred units.
+// whole field stays under the edge instead of being cropped beyond a few
+// hundred units. Worst case is a corner of the square at 1273 out, where the
+// ceiling works out at 70 against a frame edge of 77.
 const CEILING_TAPER = 0.063;
 const CEILING_MIN = 55;
 
@@ -85,39 +88,36 @@ function createFlakeTexture() {
   return texture;
 }
 
+/** How high a flake at this distance from the player may be and stay in shot. */
+function ceilingAt(distance) {
+  return Math.max(CEILING_MIN, CEILING_NEAR - distance * CEILING_TAPER);
+}
+
 /**
  * Builds the snowfall as a single THREE.Points.
  *
- * One draw call for the lot. The per-flake fall speed, sway phase and ceiling
- * ride along on the returned object rather than in module state, so the thing
- * that is drawn and the thing that is stepped cannot get out of sync.
+ * One draw call for the lot. The per-flake fall speed and sway phase ride
+ * along on the returned object rather than in module state, so the thing that
+ * is drawn and the thing that is stepped cannot get out of sync.
  */
 export function createSnow() {
   const positions = new Float32Array(FLAKE_COUNT * 3);
   const speeds = new Float32Array(FLAKE_COUNT);
   const phases = new Float32Array(FLAKE_COUNT);
-  // Each flake remembers its own ceiling, because the ceiling depends on how
-  // far out the flake is and recycling must put it back under the frame edge.
-  const ceilings = new Float32Array(FLAKE_COUNT);
 
   for (let index = 0; index < FLAKE_COUNT; index += 1) {
-    const angle = Math.random() * Math.PI * 2;
-    // Square-rooted so the flakes spread evenly over the band's area. Picking
-    // the radius straight from a uniform number would crowd them at the
-    // inside edge, right where they are least wanted.
-    const radius = Math.sqrt(
-      INNER_RADIUS ** 2 + Math.random() * (OUTER_RADIUS ** 2 - INNER_RADIUS ** 2),
-    );
-    const ceiling = Math.max(CEILING_MIN, CEILING_NEAR - radius * CEILING_TAPER);
+    // Spread evenly over the square, which is where Tode starts.
+    const x = THREE.MathUtils.randFloatSpread(FIELD_HALF * 2);
+    const y = THREE.MathUtils.randFloatSpread(FIELD_HALF * 2);
     const offset = index * 3;
 
-    positions[offset] = Math.cos(angle) * radius;
-    positions[offset + 1] = Math.sin(angle) * radius;
-    // Z is up in this game. Seeded across the full height so the first frame
-    // already shows a fall in progress rather than a curtain dropping in.
-    positions[offset + 2] = Math.random() * ceiling;
+    positions[offset] = x;
+    positions[offset + 1] = y;
+    // Z is up in this game. Seeded across the flake's own headroom so the
+    // first frame already shows a fall in progress rather than a curtain
+    // dropping in.
+    positions[offset + 2] = Math.random() * ceilingAt(Math.hypot(x, y));
 
-    ceilings[index] = ceiling;
     speeds[index] = THREE.MathUtils.lerp(FALL_SPEED_MIN, FALL_SPEED_MAX, Math.random());
     phases[index] = Math.random() * Math.PI * 2;
   }
@@ -145,31 +145,33 @@ export function createSnow() {
 
   snow.speeds = speeds;
   snow.phases = phases;
-  snow.ceilings = ceilings;
 
   return snow;
 }
 
 /**
- * Advances the snowfall one frame and keeps it around the player.
+ * Advances the snowfall one frame and keeps the field around the player.
  *
- * The band travels with Tode rather than sitting at the world origin: it is
- * only 900 units across, so anchored at the origin it would fall off one side
- * of the frame as soon as he hopped away. This is the same move the lighting
- * makes to keep its shadow box over him.
+ * Every flake holds a world position and keeps it. The field follows Tode by
+ * *wrapping* -- a flake that ends up more than FIELD_HALF away on an axis is
+ * moved the full span to the other side -- rather than by translating the
+ * whole object to his position.
  *
- * Only x and y follow. Taking z as well would lift the whole band on every
- * hop and the snow would bob with him.
+ * The difference is the whole point. Moving the object rigidly keeps every
+ * flake at a fixed offset from the camera, which is also parented to him, so
+ * the snow sits dead still on screen while the world slides underneath and
+ * reads as glued to the lens. Wrapping leaves the flakes standing in the
+ * world, so Tode hops through them and they stream past him.
  *
- * Flakes that reach the ground go back to their own ceiling in the same
- * column -- the jump is well under a pixel out there, and respawning them at
- * a fresh angle would make the band shimmer.
+ * Flakes that reach the ground go back up in the same column -- the jump is
+ * well under a pixel out there, and respawning them somewhere else would make
+ * the field shimmer.
  */
 export function updateSnow(snow, player) {
   const position = snow.geometry.attributes.position;
   const coordinates = position.array;
-
-  snow.position.set(player.position.x, player.position.y, 0);
+  const { x: playerX, y: playerY } = player.position;
+  const span = FIELD_HALF * 2;
 
   for (let index = 0; index < FLAKE_COUNT; index += 1) {
     const offset = index * 3;
@@ -180,8 +182,20 @@ export function updateSnow(snow, player) {
     coordinates[offset] += Math.sin(snow.phases[index]) * DRIFT;
     coordinates[offset + 1] += Math.cos(snow.phases[index] * 0.7) * DRIFT * 0.5;
 
+    const fromPlayerX = coordinates[offset] - playerX;
+    const fromPlayerY = coordinates[offset + 1] - playerY;
+
+    if (fromPlayerX > FIELD_HALF) coordinates[offset] -= span;
+    else if (fromPlayerX < -FIELD_HALF) coordinates[offset] += span;
+
+    if (fromPlayerY > FIELD_HALF) coordinates[offset + 1] -= span;
+    else if (fromPlayerY < -FIELD_HALF) coordinates[offset + 1] += span;
+
     if (coordinates[offset + 2] < 0) {
-      coordinates[offset + 2] = snow.ceilings[index];
+      // Measured now, not at build time: the flake has moved, and so has he.
+      coordinates[offset + 2] = ceilingAt(
+        Math.hypot(coordinates[offset] - playerX, coordinates[offset + 1] - playerY),
+      );
     }
   }
 
