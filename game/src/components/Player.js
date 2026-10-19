@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const MODEL_PATH = '/models/tode.glb';
-const MODEL_SCALE = 20;
+// 16 puts Tode at 16 x 12 on the ground and 10.1 tall -- about knee height
+// next to the houses, which stand 80 units to the ridge. Down from 20, where
+// he read as a four-and-a-half-foot frog, but back up from 12: the wider
+// camera this scenery needs costs him screen size, and 12 left him an
+// eleven-pixel speck. Nothing below needs adjusting -- the model is lifted by
+// its own measured box, so it rests on the ground plane at any scale.
+const MODEL_SCALE = 16;
 
 export function createPlayer() {
   const player = new THREE.Group();
