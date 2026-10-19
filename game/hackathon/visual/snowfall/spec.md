@@ -17,13 +17,16 @@ from there. Nothing above 180 world units is ever on screen, at any distance.
 A band out at 1100–2600 with a ceiling of 620 over the peaks is 86% invisible
 at its near edge and 100% invisible at its far edge.
 
-So the band hugs the ground and sits near the player instead:
+So the field hugs the ground around the player instead:
 
-- **Radius 120 to 900**, centred on Tode rather than on the world origin.
-- **Ceiling tapering from 150 down to 93**, as `CEILING_NEAR -
-  radius * CEILING_TAPER`, where the taper is `tan(3.6 degrees)`. A flat
+- **A square 1800 across**, `FIELD_HALF` of 900 on each axis. A square rather
+  than a ring because the field wraps, and only a shape that tiles wraps
+  seamlessly.
+- **Ceiling tapering from 150 down to 70**, as `CEILING_NEAR -
+  distance * CEILING_TAPER`, where the taper is `tan(3.6 degrees)`. A flat
   ceiling gets cropped past a few hundred units; this one tracks the frame's
-  top edge the whole way out.
+  top edge the whole way out. Worst case is a corner at 1273, where the
+  ceiling is 70 against a frame edge of 77.
 
 These numbers are a function of `Camera.js`. If its height, pitch or field of
 view change, recompute them or the snow silently vanishes again. Say so in a
@@ -52,9 +55,11 @@ In the `components` directory, add a `Snow.js` file:
   edge, which is the one place they are least wanted.
 - Seed the height across each flake's own ceiling, so the first frame shows a
   fall already in progress instead of a curtain dropping in.
-- Recycle a flake that reaches the ground back to **its own** ceiling, in the
-  **same column**. A shared ceiling puts outer flakes back above the frame
-  edge; a fresh angle makes the whole band shimmer.
+- Recycle a flake that reaches the ground back up in the **same column**, to
+  a ceiling measured from its distance to the player **at that moment** —
+  both it and he have moved since. A shared ceiling puts outer flakes back
+  above the frame edge; respawning one somewhere else makes the field
+  shimmer.
 - Draw the flake into a 32px `CanvasTexture` radial gradient rather than
   shipping an image. `PointsMaterial` with no map draws a hard square, which
   at this size reads as grit. Same trade `Sky.js` makes for the backdrop.
@@ -73,6 +78,23 @@ In the `components` directory, add a `Snow.js` file:
   converting only the snow to real time would make it the one thing in the
   game running at a fixed rate.
 
+#### Following the player
+
+The field has to stay around Tode, who ranges 700 units from the origin while
+the field is only 900 across. There are two ways to do that and only one of
+them works.
+
+**Do not translate the object to his position.** It is the obvious move and
+it is wrong: the camera is parented to the player too, so every flake keeps a
+fixed offset from the lens. The snow then sits dead still on screen while the
+world slides underneath it, and reads as stuck to the camera rather than
+falling through the scene.
+
+**Wrap instead.** Every flake holds a world position and keeps it. Each
+frame, a flake more than `FIELD_HALF` from the player on an axis is moved the
+full span to the other side. The flakes stand still in the world, Tode hops
+through them, and they stream past him. The object itself never moves.
+
 #### Main
 
 In `main.js`:
@@ -83,9 +105,8 @@ In `main.js`:
   `isGameOver()` guard, next to `updateAttack`. The snow carries on over the
   Game Over screen, the same way the lighting stays up rather than cutting to
   black.
-- `updateSnow` moves the band's x and y to the player's and leaves z alone.
-  Following z as well would lift the whole band on every hop and the snow
-  would bob with him.
+- `updateSnow` takes the player only to wrap against. It never moves the
+  `THREE.Points` object itself — see above.
 
 #### Constraints
 
