@@ -100,6 +100,27 @@ const MODEL_BASE_ROTATION = Math.PI;
 // reasoning: at zero the houses sit on the ground.
 const PLOT_Z = 0;
 
+// The windows were already lit, and nobody had noticed.
+//
+// `winter_country_house.glb` carries five emissive materials, all of them
+// inside the `House` group this file already keeps: `Glass` on seven window
+// panes, and `RedLight`, `BlueLight`, `YellowLight` and `GreenLight` on twelve
+// small bulbs. 19 pieces and 152 triangles out of the house's 80,238, so they
+// cost nothing. Emissive is not affected by scene lighting, so under the old
+// day rig -- ambient and directional both at 1.5 -- they were simply lost in a
+// scene whose snow was already at 239. Turning the lights down revealed them.
+//
+// Nothing here adds a light to a window. The one change is the colour.
+const WINDOW_MATERIAL = 'Glass';
+// The model ships `emissiveFactor [1, 1, 0]`, which is pure saturated yellow
+// and reads as a warning lamp rather than a lit room. This is a lamp amber.
+//
+// Passed as a hex and not pre-converted: THREE.Color treats a hex as sRGB and
+// converts it to linear on the way in, which is what is wanted. Converting it
+// by hand first applies the curve twice and the windows come out dim and
+// brown.
+const WINDOW_COLOR = 0xffcc77;
+
 const loader = new GLTFLoader();
 
 // The placed houses, in the order the arc was walked -- west to east. Exported
@@ -129,6 +150,23 @@ function takePiece(source, plot, name, exclude = []) {
   plot.add(piece);
 
   return piece;
+}
+
+/**
+ * Retints the window glass on the loaded source, once.
+ *
+ * Deliberately not inside the per-house traverse below. `gltf.scene.clone()`
+ * shares materials rather than copying them, so a clone's `Glass` is the same
+ * object as the source's -- setting it per house would do identical work five
+ * times and, worse, would read as if each house had its own glass.
+ */
+function lightTheWindows(source) {
+  source.traverse((child) => {
+    if (!child.isMesh) return;
+    if (child.material?.name !== WINDOW_MATERIAL) return;
+
+    child.material.emissive.setHex(WINDOW_COLOR);
+  });
 }
 
 function createHouse(source, angle) {
@@ -195,6 +233,8 @@ function createHouse(source, angle) {
  */
 export function createHouses(map) {
   loader.load(MODEL_PATH, (gltf) => {
+    lightTheWindows(gltf.scene);
+
     const spread = THREE.MathUtils.degToRad(TOWN_SPREAD_DEGREES);
 
     for (let index = 0; index < HOUSE_COUNT; index += 1) {

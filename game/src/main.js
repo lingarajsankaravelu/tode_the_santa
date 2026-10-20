@@ -13,23 +13,29 @@ import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
 import { initMusic } from './components/Music.js';
+import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
+import { createLighting } from './components/Lighting.js';
 
-const AMBIENT_LIGHT_INTENSITY = 1.5;
-const DIRECTIONAL_LIGHT_INTENSITY = 1.5;
-const DIRECTIONAL_LIGHT_POSITION = { x: -100, y: -100, z: 200 };
+// Where the landscape dissolves into the sky. The ground is 3280 units across,
+// so its far corner stands 2319 from the origin: fading out at 2300 means the
+// edge of the world is never a straight cut-off against the backdrop, it is
+// just distance. Tight on purpose -- any less and the corners come back.
+const FOG_FAR = 2300;
+// Has to clear the camera, which sits 409 units behind Tode, or he is the one
+// thing in the scene that fogs. It also leaves the town crisp as he walks up
+// to it: the nearest front wall is 443 out from the origin.
+const FOG_NEAR = 600;
 
 const scene = new THREE.Scene();
 
-const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
-scene.add(ambientLight);
+// The game had no sky at all until now -- the renderer is created with
+// `alpha: true` and nothing ever assigned a background, so the whole thing was
+// played against the browser's white page. That went unnoticed in daylight and
+// is the first thing anyone sees at night.
+scene.background = createSkyTexture();
+scene.fog = new THREE.Fog(HORIZON_COLOR, FOG_NEAR, FOG_FAR);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
-directionalLight.position.set(
-  DIRECTIONAL_LIGHT_POSITION.x,
-  DIRECTIONAL_LIGHT_POSITION.y,
-  DIRECTIONAL_LIGHT_POSITION.z,
-);
-scene.add(directionalLight);
+scene.add(createLighting());
 
 // Added before the player so the floor is the first thing in the scene; the
 // houses are parented to the map group rather than the scene, so the scenery
