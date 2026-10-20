@@ -88,12 +88,32 @@ piece of ground and they should not all become the same white:
 - **The 30% scatter** → `GROUND_SNOW_SHADE`, so the fields keep the two-tone
   mottling that stops them reading as one flat sheet.
 
-#### A flat colour is not enough, and the jitter does not save it
+#### Recolouring the ground does not work at all — the snow is a second surface
 
-**This is the part the first implementation got wrong, and the correction is the
-main content of this spec.** The original text said to keep the `hex(base, 0.09)`
-jitter as the thing "giving the fields any texture at all". It gives none. In the
-browser the result was, in the user's words, "just white and glossy".
+**This is the heart of the task, and it took two failed attempts in the browser
+to find it. Read this section before writing any code.**
+
+The first attempt recoloured the terrain white. The result was "just white and
+glossy". The second attempt added a drift field to the vertex colours and
+mattened the material. The result was *still* "still white and glossy".
+
+The colour was never the problem. **Snow is a layer**, with thickness, lying on
+top of the ground — which is exactly what it is on the house, where `Snow1` and
+its six `polySurface` caps are separate geometry over the roof and the trees, not
+a white roof. That is the comparison that kept coming up, and it is the answer:
+no amount of vertex colour makes a plane read as snow, because what identifies
+snow is a surface of its own catching light at its own angles. The play area
+makes this absolute — all 1,712 basin faces share the single normal `(0,-1,0)`,
+so a recoloured basin has *no* shading information in it whatsoever.
+
+So the generator emits **a third mesh**: `snow`, with its own material, laid over
+the terrain. See "The snow bed" below. The colour work that follows is still
+wanted, but it is a finish on that surface, not a substitute for it.
+
+#### The colour groundwork (necessary, not sufficient)
+
+The original text said to keep the `hex(base, 0.09)`
+jitter as the thing "giving the fields any texture at all". It gives none.
 
 Two measurements say why:
 
@@ -139,20 +159,107 @@ Keep the per-face jitter, but drop it to `hex(base, 0.06)`. Its job is now a
 finishing grain that stops the blend banding across the flat basin, not the
 only source of variation.
 
-Measured result: 43 levels of rendered crest-to-hollow contrast, and **20**
-levels of variation surviving a 4-unit tile average — which is the number that
-matters, because it is what the eye sees as drifts. Before the drift field that
-figure was approximately zero.
+`drift` is reused by the snow bed below, which is its real purpose.
 
 #### Roughness, or why it looked glossy
 
-Set the `Landscape` material's `roughnessFactor` to **`1`**, not `0.95`.
+Both the `Landscape` material and the new `Snow` material take
+`roughnessFactor: 1`, not `0.95`.
 
 At 0.95 a near-white surface 3,280 units across keeps a broad specular sheen,
 and that sheen is why the snowfield read as glossy white plastic next to the
 house — whose own `Snow2` material is `roughnessFactor: 1`, which is exactly the
 comparison that exposed it. There is no sun disc in this scene for a highlight
 to catch, so the sheen buys nothing and costs the matte surface snow needs.
+
+#### The snow bed
+
+A third mesh in the generator, `snow`, emitted from the same 88×88 grid as the
+land and given its own material:
+
+```js
+json.materials.push({ name: 'Snow', doubleSided: true,
+  pbrMetallicRoughness: { baseColorFactor: [1,1,1,1], metallicFactor: 0, roughnessFactor: 1 } })
+```
+
+**The trick that makes this safe.** Snow is laid on the ground by *lowering the
+terrain* by `SNOW_DEPTH` and putting the snow surface at the old terrain line —
+not by stacking snow on top of it. The snow goes in **under** Tode's feet rather
+than on top of them, so the level he walks on never moves and the flat-basin
+agreement `Landscape.js` has with `WORLD_RADIUS` survives untouched. Stacking it
+on top would raise the floor by 12 world units and leave him walking in mid-air.
+
+```js
+const SNOW_DEPTH = 0.30          // 12.3 world units, about a foot of snow
+const SNOW_RELIEF_BASIN = 0.06   // 2.5 world units
+const SNOW_RELIEF_HILLS = 0.55   // 22.6 world units
+const landY = (x, z) => height(x, z) - SNOW_DEPTH
+```
+
+**Relief is what actually reads, and it is bounded by where Tode can walk.**
+Both terms are *subtracted*, so the snow surface can never rise above the old
+terrain line — that is what keeps the basin a floor rather than a hazard. The
+amplitude is then scaled by the existing `basinWeight`, which is the key
+observation: `WORLD_RADIUS` is **exactly** the basin edge, so outside `FLAT_R`
+Tode cannot go at all and the drifts out there are free to be real geometry.
+Inside the basin the relief may only dip slightly below the walk plane, because
+he has no ground-following and every unit of hollow is a unit he hovers over.
+
+```js
+function snowY (x, z) {
+  const cover = snowCover(x, z)
+  const amp = SNOW_RELIEF_BASIN +
+    (SNOW_RELIEF_HILLS - SNOW_RELIEF_BASIN) * basinWeight(x, z)
+  const dip = (1 - drift(x, z)) + 0.18 * crunch(x, z)
+  return height(x, z) - SNOW_DEPTH * (1 - cover) - amp * dip * cover
+}
+```
+
+**`snowCover` keeps the hills' shape.** Snow does not lie on water and slides
+off anything steep, so coverage is zero over the channel and falls off with
+slope. Without it the snow layer shrink-wraps the terrain and erases every
+silhouette on it; with it the rock faces stay bare, which is what reads as a
+hill under snow. Where cover reaches zero the surface tapers to meet the land
+and **no face is emitted at all** — a degenerate face lying in the ground would
+simply z-fight it.
+
+**`crunch` must be a function of position, not of grid index.** Adjacent cells
+share vertices, and a per-vertex value that disagreed between them would open
+cracks straight through the surface. `0.5 + 0.5 * Math.sin(x * 12.9898 + z * 78.233)`
+aliases to something effectively random at a wavelength below one cell, which is
+what gives the snow its faceted crunch instead of a smooth skin.
+
+**Wind the snow faces the opposite way to the land**, so its normals come out
+facing the sky. The land grid's all point down and render correctly only because
+its material is `doubleSided`; the surface the whole scene is lit through should
+not be relying on that.
+
+**The land becomes earth again.** It is now seen only where the snow is not — the
+river bed, the wet bank, the steep faces — so its palette goes back to mineral
+tones with a new `EARTH = 0x6a6355`. Green field showing through the gaps in a
+snowfield is worse than no gaps at all. The two height thresholds in its cascade
+must be tested against `my + SNOW_DEPTH`, since they were chosen against
+`height()` and the whole grid now sits that far below it; left alone they quietly
+widen the river bed and shrink the high ground.
+
+**Scatters sit on the snow.** `pine` takes its base from `snowY` rather than
+`height`, so trunks emerge from the snow instead of being buried a foot deep in
+it. Shoreline rocks take `Math.max(snowY, landY)` — snow where it lies, bare bank
+where it does not.
+
+Measured result:
+
+| | Basin (r < 17) | Hills (r > 21) |
+|---|---|---|
+| Mean face tilt | 0.7° | **20.6°** |
+| Max face tilt | 12° | 55° |
+| Rendered range | 169–221 | 148–229 |
+| Std dev | 9.2 | 12.0 |
+
+The hills column is the one that matters: 20.6° of mean tilt is real shading
+that changes with the light, which is what no amount of vertex colour was ever
+going to supply. The basin stays nearly flat because it must, and 12° of maximum
+facet from `crunch` is as much as the walk plane can afford.
 
 #### Wildflowers come out
 
@@ -206,17 +313,25 @@ the verges left bright.
    generator is being re-run and that is the moment to confirm the shape did not
    drift. Note that the generator does **not** print these; it prints only
    triangles and bytes. They have to be read back out of the `.glb`.
-2. The `.glb` should come back at roughly 2.5 MB and **23,100** triangles, down
-   from 24,982. The drop is 1,882, which is 170 flowers at 11 triangles each —
-   so if the number lands there, nothing but the flowers left.
+2. The `.glb` should come back at roughly 3.9 MB and **36,386** triangles, of
+   which **13,226** are the snow layer. That is up from 24,982, and the snow bed
+   is what paid for it: against the winter town's 401,190 triangles it is not
+   worth optimising, but the file is 1.4 MB larger to load and that is the real
+   cost of this task.
    Expect the pines, shoreline rocks and mountains to sit in slightly different
    places than before: removing the flower loop and the 30% scatter changes how
    many times `rnd()` is called before those scatters run. The terrain *shape*
    is unaffected, since `height()` does not draw on `rnd()` at all.
-3. In the browser: white fields, green pines, the river still blue, rocks and
-   hill faces still visible as shape rather than flat white, and the mountains
-   still readable as distant.
-4. Check the horizon specifically. This is the thing most likely to go wrong, and
+3. In the browser: a snow *surface* with visible form, not a white floor — drifts
+   catching the light across the middle distance, bare rock on the steep faces,
+   the snow thinning out to bare bank at the water's edge. Green pines standing
+   in it, the river still blue, the mountains still readable as distant.
+4. Check the walk plane. The snow top inside the basin must be **≤ 0** at every
+   vertex, or Tode is walking inside the ground. Measured: max `-0.0044`, min
+   `-0.0830`, so he hovers at most 3.4 world units — against his own height of
+   102, which is nothing. Also confirm **zero** snow faces over the channel and
+   **zero** snow normals pointing down.
+5. Check the horizon specifically. This is the thing most likely to go wrong, and
    the reason for the two new constants.
 
    Worth being honest about the margin: the brightest drift crest renders at 225
@@ -234,13 +349,19 @@ snow layer for the ground patch that came with it — thrown away by
 that snow is not missed, which is a small retrospective confirmation that
 dropping it was right.
 
-The open question is depth rather than colour. The drift field fakes drifts with
-shading, and it cannot do more than that: real drifts are geometry, and raising
-the snow where Tode walks would push the ground up through his feet and break the
-flat-basin agreement `Landscape.js` has with `WORLD_RADIUS`. Snow banked against
-the windward side of the hills and the houses — *outside* the basin, where the
-terrain is already free to move — is the real version of this and is a much
-larger change.
+The lesson worth carrying forward is that **a material change cannot substitute
+for geometry**. Two passes were spent on colour — a cooler palette, then a
+measured drift field with 20 levels of surviving broad-form variation — and
+neither moved the browser result at all, because the basin has one normal and
+flat shading of a flat plane is flat whatever its colour. The snow bed worked
+immediately. When something is meant to read as a *material lying on* a surface,
+the first question is whether it has a surface of its own, not what colour it is.
+
+What is still missing is snow banked *against* things — drifts piled on the
+windward side of the houses and the hills. The basin-weighted relief gives the
+open ground its form, but the five houses sit in the snow without disturbing it.
+That needs the snow layer to know where the town is, which means the generator
+would need the town's arc, and `visual/winter_town` owns those constants.
 
 One latent problem found while measuring, and deliberately **not** fixed here.
 Every basin face has the normal `(0,-1,0)`: the terrain grid is wound so its
