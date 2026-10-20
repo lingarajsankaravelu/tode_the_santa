@@ -1,6 +1,10 @@
 // Jump-based player movement: one arrow key press == one hop.
-import { isPositionFree, wouldCollide } from './Collision.js';
-import { isGameOver, triggerGameOver } from './GameState.js';
+// `wouldCollide` and `triggerGameOver` went with the monsters -- see the
+// commented hop-into-a-monster test below. Both are still exported by their
+// modules; only this file stopped asking for them.
+import { isPositionFree } from './Collision.js';
+import { getCameraYaw } from './Camera.js';
+import { isGameOver } from './GameState.js';
 import { getDifficulty } from './Difficulty.js';
 
 
@@ -13,17 +17,57 @@ const JUMP_DISTANCE = 80;
 // 41 in Landscape.js, which puts the first rising ground at 707. Past this he
 // would be standing inside a hill, so the hop is refused instead.
 const WORLD_RADIUS = 700;
-// Extra turn applied to the model if tode.glb does not face +Y by default.
-const MODEL_BASE_ROTATION = 0;
+// Extra turn applied to the model because tode.glb does not face +Y by
+// default. It faces +Z, which was settled by measurement rather than by eye:
+// rendered from -Z the model is a blank slab with the eye blocks behind it,
+// and from +Z it is the face. The loader tips every model by rotation.x =
+// PI/2, which sends local +Z to world -Y -- so at a yaw of zero Tode faced
+// the camera while ArrowUp carried him away from it, and all four keys ran
+// him backwards. Half a turn puts his face on his direction of travel.
+//
+// This is the constant that exists for the problem, so it is the fix until
+// the rebuilt model lands facing -Z as its spec requires, at which point it
+// goes back to 0.
+const MODEL_BASE_ROTATION = Math.PI;
+// The hop advances by `moveSpeed` of its arc per *frame*, not per second, so
+// turning it into a clip length means assuming a frame rate. At the table's
+// 0.04 a hop is 25 frames and at its 0.08 ceiling it is 12.5, which on a 60Hz
+// display is 0.42s falling to 0.21s over a run. A machine running at another
+// rate hops at another speed -- that is true of the hop itself today, and the
+// clip is stretched to match whatever the hop does rather than fixing it here.
+const FRAMES_PER_SECOND = 60;
 
-// Arrow key -> travel direction on the XY ground plane, plus the facing angle
-// around the model's up axis (which is world Z once rotation.x = PI/2).
-const DIRECTIONS = {
-  ArrowUp: { x: 0, y: 1, rotation: 0 },
-  ArrowDown: { x: 0, y: -1, rotation: Math.PI },
-  ArrowLeft: { x: -1, y: 0, rotation: Math.PI / 2 },
-  ArrowRight: { x: 1, y: 0, rotation: -Math.PI / 2 },
+// Key -> a direction in the CAMERA'S frame: forward is away from the lens,
+// strafe is ninety degrees to its right. The world direction is worked out
+// per hop from wherever the mouse has left the camera, so W is always "away
+// from me" on screen whichever way the view happens to be pointing. With a
+// camera the player can spin, the old world-fixed table stopped matching the
+// screen the moment they did -- press W, turn ninety degrees, and W is
+// sideways.
+//
+// The arrows are kept beside WASD rather than replaced: four lines, and they
+// are what anyone who has played this already will reach for.
+const MOVE_KEYS = {
+  KeyW: { forward: 1, strafe: 0 },
+  KeyS: { forward: -1, strafe: 0 },
+  KeyA: { forward: 0, strafe: -1 },
+  KeyD: { forward: 0, strafe: 1 },
+  ArrowUp: { forward: 1, strafe: 0 },
+  ArrowDown: { forward: -1, strafe: 0 },
+  ArrowLeft: { forward: 0, strafe: -1 },
+  ArrowRight: { forward: 0, strafe: 1 },
 };
+
+/**
+ * The yaw that points the model's nose along a ground direction.
+ *
+ * Written for a model whose forward is its local -Z -- the glTF convention,
+ * and what the asset spec requires. MODEL_BASE_ROTATION carries the half turn
+ * that today's wrong-facing tode.glb needs on top of it.
+ */
+function facingFor(direction) {
+  return Math.atan2(-direction.x, direction.y) + MODEL_BASE_ROTATION;
+}
 
 const inputQueue = [];
 
@@ -31,15 +75,26 @@ let currentMove = null;
 
 export function initInput() {
   window.addEventListener('keydown', (event) => {
-    if (!DIRECTIONS[event.key] || isGameOver()) return;
+    if (!MOVE_KEYS[event.code] || isGameOver()) return;
 
     event.preventDefault();
-    inputQueue.push(event.key);
+    inputQueue.push(event.code);
   });
 }
 
 function startMove(player, key) {
-  const direction = DIRECTIONS[key];
+  const input = MOVE_KEYS[key];
+  const yaw = getCameraYaw();
+
+  // The camera's own forward and right, flattened onto the ground plane.
+  // Only one of forward/strafe is ever non-zero, so the result is already a
+  // unit vector and needs no normalising.
+  const forwardX = Math.sin(yaw);
+  const forwardY = Math.cos(yaw);
+  const direction = {
+    x: forwardX * input.forward + forwardY * input.strafe,
+    y: forwardY * input.forward - forwardX * input.strafe,
+  };
 
   currentMove = {
     direction,
@@ -52,14 +107,24 @@ function startMove(player, key) {
   // Turn the loaded model, never the group -- the camera is a child of the
   // group and would swing around with it.
   if (player.model) {
-    player.model.rotation.y = direction.rotation + MODEL_BASE_ROTATION;
+    player.model.rotation.y = facingFor(direction);
   }
+
+  // Stretched to this hop's own length, so the clip lands when Tode does
+  // however far difficulty has wound the hop up.
+  player.animator?.play('Hop', {
+    seconds: 1 / (getDifficulty().moveSpeed * FRAMES_PER_SECOND),
+  });
 }
 
 function cancelMove(player) {
   currentMove.completed = true;
   currentMove = null;
   player.position.z = 0;
+  // Covers the hop that lands, the hop refused at the world edge and the hop
+  // into a wall alike: all three end with Tode standing still, so all three
+  // end on the idle.
+  player.animator?.play('Idle', { loop: true });
 }
 
 /**
@@ -75,6 +140,8 @@ export function resetMovement(player) {
   if (player.model) {
     player.model.rotation.y = MODEL_BASE_ROTATION;
   }
+
+  player.animator?.play('Idle', { loop: true });
 }
 
 export function updateMovement(player, enemies = [], obstacles = []) {
@@ -108,12 +175,18 @@ export function updateMovement(player, enemies = [], obstacles = []) {
     return;
   }
 
+  // Monsters are out of the game -- `game_story.md` has no enemy in it any
+  // more -- so hopping into one is no longer a way to die. `enemies` still
+  // arrives as a parameter and main.js still passes a list, so restoring this
+  // is uncommenting it and restoring the two imports above.
+  //
   // Game Over outranks collision handling: hopping into a monster ends the
   // run, rather than the hop being politely refused.
-  if (enemies.some((enemy) => wouldCollide(player, nextX, nextY, enemy))) {
-    triggerGameOver();
-    return;
-  }
+  //
+  // if (enemies.some((enemy) => wouldCollide(player, nextX, nextY, enemy))) {
+  //   triggerGameOver();
+  //   return;
+  // }
 
   // Everything else -- scenery and the like -- still just blocks. A blocked
   // hop is abandoned rather than paused, so Tode lands where he is instead of

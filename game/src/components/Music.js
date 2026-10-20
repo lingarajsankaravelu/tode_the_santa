@@ -22,7 +22,7 @@ const VISIBLE_CLASS = 'visible';
 
 let audio = null;
 let badgeElement = null;
-let muted = false;
+let muted = true;
 
 function showBadge(visible) {
   badgeElement.classList.toggle(VISIBLE_CLASS, visible);

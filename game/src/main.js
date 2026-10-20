@@ -1,11 +1,23 @@
 import * as THREE from 'three';
 import './style.css';
 import { createPlayer } from './components/Player.js';
-import { createCamera } from './components/Camera.js';
+import { createCamera, updateCamera, initCameraControls } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { initInput, updateMovement, resetMovement } from './components/Movement.js';
-import { updateEnemies, enemies, clearEnemies } from './components/Enemies.js';
-import { initAttackInput, updateAttack } from './components/Attack.js';
+// Monsters are out of the game. `game_story.md` is now catch-the-gifts and
+// deliver them: there is nothing in it to fight, and nothing chasing Tode.
+// They were already dormant before this -- `SPAWN_ENABLED` in Enemies.js has
+// been false since the winter scenery went in -- so this commits what was
+// already true and stops the chase running against an empty array every
+// frame. Enemies.js, Enemy.js and enemy.glb are all left in place: restoring
+// the chase is this import and the three call sites below.
+// import { updateEnemies, enemies, clearEnemies } from './components/Enemies.js';
+// The attack went out with the monsters it existed to kill. `game_story.md`
+// has no combat in it: Tode catches gifts and delivers them. What was left
+// once the strike was commented out was a yellow circle that flashed on Space
+// and hit nothing. Attack.js is kept on disk the way Enemies.js is -- this
+// import and the two call sites below are the whole of the wiring.
+// import { initAttackInput, updateAttack } from './components/Attack.js';
 import { initScore, updateScore, resetScore } from './components/Score.js';
 import { initGameState, isGameOver } from './components/GameState.js';
 import { updateDifficulty } from './components/Difficulty.js';
@@ -17,6 +29,7 @@ import { updateSmoke } from './components/Smoke.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
 import { createLighting } from './components/Lighting.js';
+import { updateAnimations } from './components/Animation.js';
 
 // Where the landscape dissolves into the sky. The ground is 3280 units across,
 // so its far corner stands 2319 from the origin: fading out at 2300 means the
@@ -61,7 +74,10 @@ scene.add(snow);
 const renderer = createRenderer();
 
 initInput();
-initAttackInput();
+// Needs the canvas rather than the window: pointer lock is requested on an
+// element, and the renderer owns the only one.
+initCameraControls(renderer.domElement);
+// initAttackInput();
 initScore();
 // Nothing to update per frame: the element loops itself, and it carries on
 // across a Game Over the same way the snow and the lights do.
@@ -78,7 +94,7 @@ initGameState({
   onGameOver: () => setPlayerVisible(false),
   onRestart: () => {
     resetMovement(player);
-    clearEnemies(scene);
+    // clearEnemies(scene);
     resetScore();
     setPlayerVisible(true);
   },
@@ -98,14 +114,21 @@ renderer.setAnimationLoop(() => {
   if (!isGameOver()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
-    updateMovement(player, enemies, houses);
-    updateEnemies(scene, player, houses);
+    // Empty where `enemies` used to go. The parameter stays rather than being
+    // dropped from the signature, so putting the monsters back is a one-word
+    // change here instead of a change to Movement.js as well.
+    updateMovement(player, [], houses);
+    // updateEnemies(scene, player, houses);
     updateScore();
   }
 
-  // Kept outside the freeze so a flash caught mid-fade finishes cleanly
-  // instead of hanging on screen. It refuses new attacks on its own.
-  updateAttack(scene, player);
+  // Was kept outside the freeze so a flash caught mid-fade finished cleanly
+  // instead of hanging on screen. It refused new attacks on its own.
+  // updateAttack(scene, player);
+
+  // Outside the freeze so a swing caught mid-turn still finishes instead of
+  // stopping halfway round.
+  updateCamera(camera, player);
 
   // Also outside it: the snow carries on over the Game Over screen, the
   // same way the lighting stays up rather than cutting to black.
@@ -118,6 +141,13 @@ renderer.setAnimationLoop(() => {
   // Also outside the freeze: a town whose chimneys stop on the Game Over
   // frame reads as the village dying with Tode.
   updateSmoke();
+
+  // Outside it for a plainer reason than the rest: the module reads a delta
+  // off its own clock, and a clock only asked for one some frames banks the
+  // time in between. Freezing this would hand every animation in the scene
+  // the whole length of the Game Over screen on the first frame of the
+  // restart. Tode is hidden by then anyway, so there is nothing to freeze.
+  updateAnimations();
 
   renderer.render(scene, camera);
 });

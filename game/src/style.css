@@ -101,3 +101,29 @@ body {
 .music-muted.visible {
   display: block;
 }
+
+.mouse-hint {
+  /* Centred along the bottom rather than in the badge column top-left: it is
+     an instruction to act on, not a status to glance at, and it has to be
+     read before the first click. Hidden the moment pointer lock is granted,
+     shown again whenever Escape hands the mouse back. */
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: #ffffff;
+  user-select: none;
+  /* The click it is asking for belongs to the canvas underneath. */
+  pointer-events: none;
+}
+
+.mouse-hint.visible {
+  display: block;
+}
