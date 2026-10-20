@@ -111,6 +111,27 @@ function tri (m, a, b, c, color) {
 }
 const quad = (m, a, b, c, d, color) => { tri(m, a, b, c, color); tri(m, a, c, d, color) }
 
+// A triangle carrying its own normal and colour at each corner, for a surface
+// that has to read as smooth rather than faceted.
+//
+// This is the difference between the snow bed and the snow on the house, and it
+// is why three passes of colour work never fixed the ground. tri() above gives
+// every triangle one normal and one colour -- flat shading, which is the whole
+// low-poly look and is right for earth and rock. On a near-white surface it is
+// ruinous: each triangle takes a visibly different amount of light and you see
+// every one of them, which is exactly the "triangles instead of snow" that kept
+// coming back. The house's own Snow2 mesh is 11,988 vertices carrying 22,769
+// triangles -- shared corners, averaged normals, a continuous surface. The snow
+// bed needs the same, and since snowY() is an analytic function its normals can
+// simply be evaluated rather than averaged.
+function smoothTri (m, verts, normals, colors) {
+  for (let i = 0; i < 3; i += 1) {
+    m.pos.push(verts[i][0], verts[i][1], verts[i][2])
+    m.nrm.push(normals[i][0], normals[i][1], normals[i][2])
+    m.col.push(colors[i][0], colors[i][1], colors[i][2])
+  }
+}
+
 // ------------------------------------------------------------------- terrain
 const SIZE = 40          // half-extent of the ground plane
 const GRID = 88          // cells per side
@@ -206,11 +227,16 @@ function snowCover (x, z) {
 // should not be relying on a single setting elsewhere to stay visible.
 const COVER_MIN = 0.12
 
-// Pseudo-random per vertex, but a function of position rather than of the grid
-// index, because adjacent cells share vertices and anything that disagreed
-// between them would open cracks straight through the surface. Gives the snow
-// its faceted crunch instead of a smooth skin.
-const crunch = (x, z) => 0.5 + 0.5 * Math.sin(x * 12.9898 + z * 78.233)
+// Soft lumps in the surface, on a wavelength of about 3.1 model units -- three
+// and a bit grid cells, so the grid can actually resolve them.
+//
+// This replaces a near-random per-vertex value at a wavelength BELOW one cell.
+// That aliased into something different at every corner, which was the right
+// idea for a faceted surface and the wrong one here: nothing smaller than a
+// cell can be shaded smoothly, because there are no vertices in between to
+// carry the curve. Band-limited, it reads as lumpy snow; sub-cell, it read as
+// triangles.
+const lumps = (x, z) => 0.5 + 0.5 * Math.sin(x * 2.1 + 1.7) * Math.cos(z * 1.9 - 0.6)
 
 // Where the snow is drawn, with single-cell holes filled in. A lone bare cell
 // in the middle of a snowfield is not rock showing through, it is a stray
@@ -243,10 +269,23 @@ function snowY (x, z) {
     (SNOW_RELIEF_HILLS - SNOW_RELIEF_BASIN) * basinWeight(x, z)
   // Both terms are subtracted, so the surface can never rise above the old
   // terrain line. That is what keeps the basin a floor rather than a hazard.
-  const dip = (1 - drift(x, z)) + 0.18 * crunch(x, z)
+  const dip = (1 - drift(x, z)) + 0.18 * lumps(x, z)
   // Tapers to nothing as cover falls away, so the snow thins out at the water's
   // edge and on the rock instead of ending in a cliff that needs a side wall.
   return height(x, z) - SNOW_DEPTH * (1 - cover) - amp * dip * cover
+}
+
+// The surface is y = snowY(x, z), so its normal is (-dy/dx, 1, -dy/dz).
+// Evaluated rather than averaged from the faces: the function is analytic, and
+// a central difference over a fifth of a cell is both cheaper and smoother than
+// collecting the neighbours of every vertex.
+const SNOW_EPS = 0.18
+function snowNormal (x, z) {
+  const dydx = (snowY(x + SNOW_EPS, z) - snowY(x - SNOW_EPS, z)) / (2 * SNOW_EPS)
+  const dydz = (snowY(x, z + SNOW_EPS) - snowY(x, z - SNOW_EPS)) / (2 * SNOW_EPS)
+  const len = Math.hypot(dydx, 1, dydz)
+
+  return [-dydx / len, 1 / len, -dydz / len]
 }
 
 const gridX = (i) => -SIZE + (i / GRID) * SIZE * 2
@@ -282,22 +321,29 @@ for (let i = 0; i < GRID; i++) {
     }
 
     // --- the snow lying on it ---
-    const sa = snowPt(i, j), sb = snowPt(i + 1, j)
-    const sc = snowPt(i + 1, j + 1), sd = snowPt(i, j + 1)
-    // Wound the opposite way round to the land, so these normals come out
-    // facing the sky. The land grid's all point down and survive only because
+    // Each corner carries its own position, normal and colour, so the four
+    // triangles meeting at a vertex all agree there and the surface shades as
+    // one piece. No per-face colour jitter either: a jitter is a discontinuity
+    // at every edge, and it would draw the triangles back in just as clearly as
+    // a per-face normal does.
+    const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([ci, cj]) => {
+      const x = gridX(ci), z = gridX(cj)
+
+      return { p: [x, snowY(x, z), z], n: snowNormal(x, z), c: hex(snowAt(x, z)) }
+    })
+    const [sa, sb, sc, sd] = corners
+    // Wound the opposite way round to the land, so the winding agrees with the
+    // normals above. The land grid's all point down and survive only because
     // its material is doubleSided; the surface the whole scene is lit through
     // should not be relying on that.
     const sfaces = diag ? [[sa, sc, sb], [sa, sd, sc]] : [[sa, sd, sb], [sb, sd, sc]]
     for (const f of sfaces) {
-      const mx = (f[0][0] + f[1][0] + f[2][0]) / 3
-      const mz = (f[0][2] + f[1][2] + f[2][2]) / 3
+      const mx = (f[0].p[0] + f[1].p[0] + f[2].p[0]) / 3
+      const mz = (f[0].p[2] + f[1].p[2] + f[2].p[2]) / 3
       // No face at all where the snow has tapered away, rather than a
       // degenerate one lying in the ground z-fighting it.
       if (!snowHere(mx, mz)) continue
-      // Gentler jitter than the land gets: the relief is supplying the
-      // variation now, and heavy colour noise on top of it only reads as dirt.
-      tri(snow, f[0], f[1], f[2], hex(snowAt(mx, mz), 0.04))
+      smoothTri(snow, f.map((v) => v.p), f.map((v) => v.n), f.map((v) => v.c))
     }
   }
 }

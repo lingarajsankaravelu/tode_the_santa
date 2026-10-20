@@ -127,7 +127,67 @@ piece of ground and they should not all become the same white:
 - **The 30% scatter** → `GROUND_SNOW_SHADE`, so the fields keep the two-tone
   mottling that stops them reading as one flat sheet.
 
-#### Recolouring the ground does not work at all — the snow is a second surface
+#### Read this first: the snow must be SMOOTH-SHADED
+
+**This is the single thing that makes snow look like snow, and it was missed
+through three browser rounds of fixing other things.** The symptom was the same
+report every time — "I can see triangles instead of snow" — and the cause is one
+line of the generator's design.
+
+`tri()` pushes three unshared vertices carrying **one face normal and one
+colour**. That is flat shading, and it is the whole low-poly look: correct for
+earth, rock and the angular mountains. On a large near-white surface it is
+ruinous. Each triangle takes a visibly different amount of light, so you see
+every single one.
+
+Measured on the land mesh, which is still flat by design: triangles meeting at a
+shared corner disagree by up to **139°** of normal, giving a mean brightness jump
+of **11.3 levels** across the edge. A triangle edge becomes visible at about 2.
+
+The house's snow is the other thing entirely, and it is why it was the
+comparison that kept coming up: `polySurface472_Snow2_0` is **11,988 vertices
+carrying 22,769 triangles** — shared corners, averaged normals, one continuous
+surface.
+
+So the snow bed is emitted through a `smoothTri()` that takes a normal and a
+colour **per corner**, and because `snowY()` is analytic the normals can simply
+be evaluated instead of averaged:
+
+```js
+const SNOW_EPS = 0.18
+function snowNormal (x, z) {
+  const dydx = (snowY(x + SNOW_EPS, z) - snowY(x - SNOW_EPS, z)) / (2 * SNOW_EPS)
+  const dydz = (snowY(x, z + SNOW_EPS) - snowY(x, z - SNOW_EPS)) / (2 * SNOW_EPS)
+  const len = Math.hypot(dydx, 1, dydz)
+  return [-dydx / len, 1 / len, -dydz / len]
+}
+```
+
+Two consequences that are not optional:
+
+- **No per-face colour jitter on the snow.** A jitter is a discontinuity at
+  every edge, and it draws the triangles back in just as clearly as a per-face
+  normal does. Vertex colours come from `snowAt(x, z)` with jitter zero.
+- **Relief must be band-limited to something the grid can resolve.** An earlier
+  version used a near-random value at a wavelength *below* one cell. Nothing
+  smaller than a cell can be shaded smoothly, because there are no vertices in
+  between to carry the curve — so it aliased into a different normal at every
+  corner and read as triangles however the normals were computed. `lumps()` is
+  on a 3.1-unit wavelength, three and a bit cells.
+
+Verification is exact, not visual: group the snow mesh's corners by position and
+compare the normals of every triangle meeting there. The worst disagreement must
+be **0°** and the brightness jump **0.0 levels**. Measured after this change:
+0.02° and 0.00, against 139° and 11.3 for the flat land beside it. Form is not
+lost to the smoothing — the hills keep a brightness std of 11.1 against 12.0
+flat, and 20.6° of mean normal tilt.
+
+The mountains are left flat-shaded on purpose: they are meant to be angular
+crags, and their faceting reads as rock. If triangles are still visible *on the
+peaks* after this, they are the remaining flat-shaded white surface in the scene
+and want the same treatment.
+
+#### Recolouring the ground does not work either — the snow is a second surface
 
 **This is the heart of the task, and it took two failed attempts in the browser
 to find it. Read this section before writing any code.**
