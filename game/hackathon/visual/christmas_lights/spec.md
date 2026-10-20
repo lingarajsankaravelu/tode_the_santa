@@ -108,8 +108,11 @@ bulbs towards the tip. Integrate the curve numerically — a few hundred samples
 is ample and it runs once — then place bulbs at even distances along it.
 
 This gives **5 to 22 bulbs per tree and 214 per plot**, so 1,070 bulbs across
-the town. Against the town's 252,390 triangles that is nothing, and the wiring
-below draws it in five calls.
+the town. Against the town's 453,000 triangles that is nothing, and the wiring
+below draws it in five calls. (The figure of 252,390 that `visual/snow_roads`
+and an earlier draft of this spec both quote is stale -- it predates the five
+houses reaching their current content. Five plots are 83,440 triangles each
+and the landscape is 36,197.)
 
 **Five trees carry snow caps, and that is not a bug to chase.** The `Snow`
 group that `House.js` keeps has six children; five of them are caps sitting on

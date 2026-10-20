@@ -15,7 +15,7 @@ const MODEL_SCALE = 7.4;
 // meshes and 124,005 triangles: a house, a well, trees, a snowman, lying snow,
 // a bridge, sledges, shovels, fishes, a smoke puff and a ground patch, spread
 // across a scene 159 units long. Only the named pieces below are kept, which
-// brings a house to 80,238 triangles.
+// brings a house to 83,440 triangles.
 //
 // The discard that matters is `Ground`, 27,595 triangles of ground patch. The
 // landscape already is the ground, and two ground surfaces at one height is
@@ -80,15 +80,33 @@ const PROPS = [
   // be. At (66, 72) world units from the house they already read as beside it.
   { name: TREES_NAME, offset: { x: 0, z: 0 } },
   { name: 'Kolodec', offset: { x: 0, z: 0 }, exclude: ['pCylinder14'] },
-  // The snowman, in the front yard where it was modelled: 26 world units off
-  // the front wall, 12 clear of the nearest conifer and 72 clear of the well.
-  // It stands 28 units to one side of the plot's own radius, which is where
+  // The snowman, whole: body, carrot nose, bucket hat and two coal buttons.
+  // Taking the group rather than the `polySurface538` body alone costs 1,226
+  // triangles and changes the footprint by nothing at all -- same x and z to
+  // three decimal places, same base height, 3 world units taller for the hat.
+  //
+  // In the front yard where it was modelled: 26 world units off the front
+  // wall, 12 clear of the nearest conifer and 72 clear of the well. It stands
+  // 28 units to one side of the plot's own radius, which is where
   // visual/snow_roads will run a 36-wide spur to the door -- so it clears that
   // path by 10 units, and if SPUR_WIDTH grows, this is the prop it hits first.
-  { name: 'polySurface538', offset: { x: 0, z: 0 } },
+  { name: 'SnowMan', offset: { x: 0, z: 0 } },
   // Lying snow: the roof, and caps on the trees and posts. Left unmoved for
   // the same reason the trees are.
   { name: 'Snow', offset: { x: 0, z: 0 } },
+  // Smoke from the chimney, which is the cheapest thing in this file that says
+  // somebody is home on Christmas Eve. 1,976 triangles across 19 meshes.
+  //
+  // It needs no placing: the artist left it sitting on the roofline, spanning
+  // 55 to 76 world units above the plot against a house that is 55 tall, with
+  // its footprint entirely within the roof. Measured rather than assumed,
+  // because a smoke puff hanging beside a chimney is the sort of thing that
+  // only shows up from one camera angle.
+  //
+  // Static. It does not rise or drift, and animating it is a separate job --
+  // the puff is 19 separate meshes, so it would want a per-mesh drift rather
+  // than one translation, or it will read as a solid object sliding upwards.
+  { name: 'Smoke', offset: { x: 0, z: 0 } },
 ];
 
 const HOUSE_COUNT = 5;
@@ -156,6 +174,12 @@ const WINDOW_MATERIAL = 'Glass';
 // brown.
 const WINDOW_COLOR = 0xffcc77;
 
+// The chimney smoke's single material. Named here because it has to be found
+// by material rather than by node: the puff's 19 meshes are called
+// `polySurface`-something like most of this diorama, and the one thing they
+// have in common is what they are made of.
+const SMOKE_MATERIAL = 'lambert23';
+
 const loader = new GLTFLoader();
 
 // The placed houses, in the order the arc was walked -- west to east. Exported
@@ -201,6 +225,30 @@ function lightTheWindows(source) {
     if (child.material?.name !== WINDOW_MATERIAL) return;
 
     child.material.emissive.setHex(WINDOW_COLOR);
+  });
+}
+
+/**
+ * Stops the chimney smoke fighting itself, once on the loaded source.
+ *
+ * The puff is 19 interpenetrating meshes on one translucent material --
+ * `lambert23`, a near-white #ececec at 0.38 opacity, double-sided. three.js
+ * sorts transparent objects against each other back to front, but it sorts
+ * whole objects, and objects that pass through each other have no correct
+ * order: with depth writing left on, whichever drew first rejects the parts of
+ * the others behind it, and which one that is flips as the camera swings
+ * round. The puff visibly reshuffles while Tode hops.
+ *
+ * Turning depth WRITING off leaves depth TESTING on, so the house still hides
+ * the smoke where it should and the alpha simply accumulates through the puff,
+ * which is what smoke does anyway.
+ */
+function settleTheSmoke(source) {
+  source.traverse((child) => {
+    if (!child.isMesh) return;
+    if (child.material?.name !== SMOKE_MATERIAL) return;
+
+    child.material.depthWrite = false;
   });
 }
 
@@ -287,6 +335,7 @@ function createHouse(source, angle) {
 export function createHouses(map) {
   loader.load(MODEL_PATH, (gltf) => {
     lightTheWindows(gltf.scene);
+    settleTheSmoke(gltf.scene);
 
     const spread = THREE.MathUtils.degToRad(TOWN_SPREAD_DEGREES);
 
