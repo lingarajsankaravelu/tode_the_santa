@@ -96,6 +96,34 @@ const STAR_LIFT = 3;
 // same red or green as the string is not a star, it is a bulb that got lost.
 const STAR_COLOR = 0xfff4d0;
 
+// Lanterns up the path to the door. The only decoration here at ground level
+// -- everything else in this file is up a tree or on a roof -- which is what
+// makes the town read as inhabited rather than merely lit.
+//
+// They are placed against the house's own axis, which is model x = 0: the
+// plot's radius runs along model z, and model x is the tangential direction.
+// visual/snow_roads will put a spur on exactly that axis when it lands, so
+// these will line up with it without depending on it.
+//
+// Two of that spec's numbers do not survive arithmetic and are corrected
+// here. It gives an offset of 13 world units either side "which keeps them
+// clear of a 36-wide spur" -- 13 is INSIDE a spur of half-width 18, so they
+// would stand in the path rather than lining it. 22 clears it by 4. And it
+// says four lanterns, "two a side", while also saying the furthest is 98
+// units out, which needs four a side; two a side at this spacing reaches 46.
+// The aesthetic argument is the one with reasoning attached ("more reads as an
+// airport runway"), so there are four lanterns at 20 and 46.
+const LANTERN_OFFSET = 22;
+const LANTERN_DISTANCES = [20, 46];
+// Head height for a path light, which is also the height of the door's centre.
+const LANTERN_HEIGHT = 11;
+// Between a bulb's 7 and the star's 16.
+const LANTERN_SIZE = 9;
+// The window amber from visual/night, deliberately rather than a string
+// colour: a lantern is a lamp, and matching the windows is what makes it read
+// as the house's own light rather than as more decoration.
+const LANTERN_COLOR = 0xffcc77;
+
 // World units, and this is the one constant here that does NOT ride the plot's
 // scale. gl_PointSize is computed from the material's size and the view
 // distance alone, so an object's scale does not reach it -- everything else in
@@ -418,7 +446,32 @@ function eaveString(roof, scale) {
   return bulbs;
 }
 
-function build({ trees, roof }, scale) {
+/**
+ * Lantern positions, in pairs up the path from the door.
+ *
+ * Measured off the DOOR's own front plane, not the house's bounding box. The
+ * box reaches z 6.65 while the door sits at 3.56, because there is a porch or
+ * step in front of the building -- taking the box for the facade would start
+ * the path three model units out in the air.
+ */
+function lanternPositions(door, scale) {
+  const facade = new THREE.Box3().setFromObject(door).max.z;
+  const positions = [];
+
+  LANTERN_DISTANCES.forEach((distance) => {
+    [-1, 1].forEach((side) => {
+      positions.push(new THREE.Vector3(
+        (side * LANTERN_OFFSET) / scale,
+        LANTERN_HEIGHT / scale,
+        facade + distance / scale,
+      ));
+    });
+  });
+
+  return positions;
+}
+
+function build({ trees, roof, door }, scale) {
   const found = findTrees(trees, scale);
   // Tallest first, so that lighting only the nearest few per plot stays a
   // one-line experiment if 22 decorated trees turns out to read as a
@@ -486,6 +539,23 @@ function build({ trees, roof }, scale) {
     depthWrite: false,
   });
 
+  const lanterns = door ? lanternPositions(door, scale) : [];
+  const lanternGeometry = new THREE.BufferGeometry();
+  const lanternArray = new Float32Array(lanterns.length * 3);
+
+  lanterns.forEach((lantern, index) => lantern.toArray(lanternArray, index * 3));
+  lanternGeometry.setAttribute('position', new THREE.BufferAttribute(lanternArray, 3));
+
+  const lanternMaterial = new THREE.PointsMaterial({
+    map: createBulbTexture(),
+    size: LANTERN_SIZE,
+    sizeAttenuation: true,
+    color: LANTERN_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
   const material = new THREE.PointsMaterial({
     map: createBulbTexture(),
     size: BULB_SIZE,
@@ -513,16 +583,24 @@ function build({ trees, roof }, scale) {
     trees: found.length,
     starGeometry,
     starMaterial,
+    lanternGeometry,
+    lanternMaterial,
+    lanterns: lanterns.length,
   };
 }
 
 /**
  * One plot's string, as a single THREE.Points.
  *
- * Returns a group of two Points: the twinkling bulbs, and the star, which has
- * to be separate because they need different sizes. The star is deliberately
- * left out of the twinkle -- a twinkling star reads as a faulty bulb, where a
- * steady one reads as the top of the tree.
+ * Returns a group of three Points -- the twinkling bulbs, the star and the
+ * path lanterns -- which are separate objects for one reason: a
+ * PointsMaterial carries a single size, and these want 7, 16 and 9. All three
+ * geometries are still built once and shared by all five plots, so the town
+ * costs three draw calls per house.
+ *
+ * Only the bulbs twinkle. A twinkling star reads as a faulty bulb where a
+ * steady one reads as the top of the tree, and a lantern that flickers reads
+ * as a fault rather than as a lamp.
  *
  * Built in MODEL units and meant to be added to the plot group, which already
  * carries the scale, the Z-up quarter turn and the house's yaw -- so there is
@@ -541,12 +619,15 @@ export function createChristmasLights(pieces, scale) {
   const lights = new THREE.Group();
   const bulbs = new THREE.Points(shared.geometry, shared.material);
   const star = new THREE.Points(shared.starGeometry, shared.starMaterial);
+  const lanterns = new THREE.Points(shared.lanternGeometry, shared.lanternMaterial);
 
   lights.name = 'ChristmasLights';
   bulbs.name = 'Bulbs';
   star.name = 'Star';
+  lanterns.name = 'Lanterns';
   lights.add(bulbs);
   lights.add(star);
+  lights.add(lanterns);
   // frustumCulled is left at its default of true, unlike Snow.js, which turns
   // it off because its band surrounds the camera and the test is wasted work.
   // A plot's string is a compact object on the far side of the map, which is

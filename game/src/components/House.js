@@ -80,6 +80,9 @@ const SMOKE_NAME = 'Smoke';
 // triangles -- the roof snow is one 5,866-vertex mesh with a flat front edge.
 const SNOW_NAME = 'Snow';
 const ROOF_NAME = 'Snow1';
+// The front door, which the path lanterns measure their start from and the
+// wreath hangs on. It lives inside the House group.
+const DOOR_NAME = 'Door';
 
 const PROPS = [
   // Twenty-odd conifers clustered off the house's corner. Deliberately NOT
@@ -267,7 +270,11 @@ function createHouse(source, angle) {
     // child of the plot, so it travels with the yard and Collision.js never
     // hears about it.
     plot.add(createChristmasLights(
-      { trees, roof: snow?.getObjectByName(ROOF_NAME) },
+      {
+        trees,
+        roof: snow?.getObjectByName(ROOF_NAME),
+        door: building?.getObjectByName(DOOR_NAME),
+      },
       MODEL_SCALE,
     ));
   }
