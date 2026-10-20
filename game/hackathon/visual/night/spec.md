@@ -139,9 +139,14 @@ level surface:
 
 | Surface | Rendered sRGB |
 |---|---|
-| Snow, moonlit and level | **rgb(117, 133, 142)** |
+| Snow, moonlit and level | **rgb(117, 125, 142)** |
 | Snow, vertical and facing away from the moon | **rgb(47, 55, 68)** |
-| An underside, lit only by bounce off the snow | **rgb(67, 72, 91)** |
+| An underside, lit only by bounce off the snow | **rgb(67, 77, 91)** |
+
+**Amended** after implementing it: the first and third rows originally read
+`(117, 133, 142)` and `(67, 72, 91)`, which were an arithmetic slip in the
+sRGB-to-linear step on the green channel. The values above are the ones the
+formula actually gives, computed with `THREE.Color` rather than by hand.
 
 Three properties of that table are the point of these numbers:
 
@@ -233,7 +238,7 @@ the brightest thing in the scene after the windows and reads as static.
 3. Five houses with lit windows, visible from across the field. If they are not
    obvious, the emissive retint did not take — check it was applied to the
    shared source material and not to a clone.
-4. Moonlit snow lands near rgb(117, 133, 142) and shaded snow near
+4. Moonlit snow lands near rgb(117, 125, 142) and shaded snow near
    rgb(47, 55, 68). A screenshot and a colour picker settle this; it is the
    quickest way to tell a correct rig from one that merely looks dark.
 5. Nothing lights from below. If undersides are brighter than tops, the
