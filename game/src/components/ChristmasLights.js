@@ -56,6 +56,74 @@ const WRAP_TOP = 0.88;
 const BULB_OUTSET = 1.5;
 const MIN_BULBS = 5;
 
+// The string along the front eaves, which is the decoration people actually
+// notice on a real house.
+//
+// An earlier note in visual/christmas_lights said this meant picking an edge
+// out of an 80,238-triangle mesh, and that was wrong. `Snow1` -- the roof
+// snow, already kept by House.js -- is one mesh of 5,866 vertices, and its
+// front edge is flat: the 45 vertices within a whisker of its maximum z all
+// sit level, spanning 100 world units at a height of 24. So the eave is a
+// single horizontal segment, and the string is a line.
+const EAVE_SPACING = 9;
+// How close to the front edge a vertex has to be to count as on it. The
+// measured edge vertices are within 0.59 world units of the maximum.
+const EAVE_EDGE_BAND = 0.6;
+// Mid-span droop. Without it this is a ruler-straight row of dots, which is
+// the single thing most likely to make it read as programmer art. A sine is
+// indistinguishable from a catenary over 100 units and needs nothing solved.
+const EAVE_SAG = 3;
+// Hangs the string below the eave rather than on it, so the bulbs are not
+// half-buried in roof snow.
+const EAVE_DROP = 2;
+// And forward of it, for the same reason BULB_OUTSET exists.
+const EAVE_OUT = 1.5;
+
+// The star on the tallest tree in the yard, which is what makes a plot read as
+// decorated rather than merely lit.
+//
+// It cannot share the bulbs' material, and that is not a shortcut: a
+// PointsMaterial carries ONE size for every point it draws, and per-point
+// sizing needs a custom shader. visual/house_decorations says to put the star
+// "in the same geometry as the string" and also to make it 16 units against
+// the bulbs' 7, and those two instructions cannot both hold. The size is the
+// one that matters, so the star is its own one-point Points -- still built
+// once and shared by all five plots, so it costs one draw call per plot.
+const STAR_SIZE = 16;
+// Above the tip, so it sits on the tree rather than in it.
+const STAR_LIFT = 3;
+// Warm white. Deliberately not one of the four COLORS: a star that is the
+// same red or green as the string is not a star, it is a bulb that got lost.
+const STAR_COLOR = 0xfff4d0;
+
+// Lanterns up the path to the door. The only decoration here at ground level
+// -- everything else in this file is up a tree or on a roof -- which is what
+// makes the town read as inhabited rather than merely lit.
+//
+// They are placed against the house's own axis, which is model x = 0: the
+// plot's radius runs along model z, and model x is the tangential direction.
+// visual/snow_roads will put a spur on exactly that axis when it lands, so
+// these will line up with it without depending on it.
+//
+// Two of that spec's numbers do not survive arithmetic and are corrected
+// here. It gives an offset of 13 world units either side "which keeps them
+// clear of a 36-wide spur" -- 13 is INSIDE a spur of half-width 18, so they
+// would stand in the path rather than lining it. 22 clears it by 4. And it
+// says four lanterns, "two a side", while also saying the furthest is 98
+// units out, which needs four a side; two a side at this spacing reaches 46.
+// The aesthetic argument is the one with reasoning attached ("more reads as an
+// airport runway"), so there are four lanterns at 20 and 46.
+const LANTERN_OFFSET = 22;
+const LANTERN_DISTANCES = [20, 46];
+// Head height for a path light, which is also the height of the door's centre.
+const LANTERN_HEIGHT = 11;
+// Between a bulb's 7 and the star's 16.
+const LANTERN_SIZE = 9;
+// The window amber from visual/night, deliberately rather than a string
+// colour: a lantern is a lamp, and matching the windows is what makes it read
+// as the house's own light rather than as more decoration.
+const LANTERN_COLOR = 0xffcc77;
+
 // World units, and this is the one constant here that does NOT ride the plot's
 // scale. gl_PointSize is computed from the material's size and the view
 // distance alone, so an object's scale does not reach it -- everything else in
@@ -132,6 +200,58 @@ function createBulbTexture() {
 
   context.fillStyle = gradient;
   context.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  return texture;
+}
+
+/**
+ * A four-point glint, as a 32px sprite.
+ *
+ * A cross of two tapered bars over a hot core. At the 7 to 15 pixels this is
+ * ever drawn at, that is indistinguishable from a modelled star and costs a
+ * canvas instead of geometry.
+ */
+function createStarTexture() {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext('2d');
+  const middle = size / 2;
+  const core = context.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.55);
+
+  core.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  core.addColorStop(0.4, 'rgba(255, 255, 255, 0.75)');
+  core.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = core;
+  context.fillRect(0, 0, size, size);
+
+  // The two spikes. Drawn as thin bars with a gradient that fades at both
+  // ends, which is what gives the star its points.
+  const across = context.createLinearGradient(0, 0, size, 0);
+
+  across.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  across.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+  across.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = across;
+  context.fillRect(0, middle - 1.5, size, 3);
+
+  const down = context.createLinearGradient(0, 0, 0, size);
+
+  down.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  down.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+  down.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = down;
+  context.fillRect(middle - 1.5, 0, 3, size);
 
   const texture = new THREE.CanvasTexture(canvas);
 
@@ -258,7 +378,100 @@ function stringFor(tree, scale) {
   return bulbs;
 }
 
-function build(trees, scale) {
+/**
+ * Bulb positions along the front eave of the roof.
+ *
+ * Derived from the geometry rather than from the measured numbers above, the
+ * same choice the trees get: take the vertices within a band of the mesh's
+ * maximum z, and use their x range and mean height. If the asset changes, this
+ * follows it.
+ *
+ * Takes the roof in plot-local space, so `matrixWorld` is the plot-local
+ * transform -- House.js calls this while the plot's own matrix is still
+ * identity.
+ *
+ * The named node is a wrapper, not the mesh. Almost every named thing in this
+ * diorama is: `Snow1` holds one child that carries the geometry, the way each
+ * of the smoke's `pCube` nodes does. So the mesh is searched for rather than
+ * assumed, which costs nothing and is the difference between this working and
+ * reading `geometry` off an Object3D.
+ */
+function eaveString(roof, scale) {
+  let mesh = null;
+
+  roof.traverse((child) => {
+    if (!mesh && child.isMesh) mesh = child;
+  });
+
+  if (!mesh) return [];
+
+  const attribute = mesh.geometry.attributes.position;
+  const box = new THREE.Box3().setFromObject(mesh);
+  const band = EAVE_EDGE_BAND / scale;
+  const vertex = new THREE.Vector3();
+  let lowestX = Infinity;
+  let highestX = -Infinity;
+  let heightSum = 0;
+  let found = 0;
+
+  for (let index = 0; index < attribute.count; index += 1) {
+    vertex.fromBufferAttribute(attribute, index).applyMatrix4(mesh.matrixWorld);
+
+    if (vertex.z < box.max.z - band) continue;
+
+    lowestX = Math.min(lowestX, vertex.x);
+    highestX = Math.max(highestX, vertex.x);
+    heightSum += vertex.y;
+    found += 1;
+  }
+
+  if (found === 0) return [];
+
+  const height = heightSum / found;
+  const span = highestX - lowestX;
+  const count = Math.max(2, Math.round((span * scale) / EAVE_SPACING) + 1);
+  const sag = EAVE_SAG / scale;
+  const bulbs = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const u = index / (count - 1);
+
+    bulbs.push(new THREE.Vector3(
+      lowestX + span * u,
+      height - EAVE_DROP / scale - sag * Math.sin(Math.PI * u),
+      box.max.z + EAVE_OUT / scale,
+    ));
+  }
+
+  return bulbs;
+}
+
+/**
+ * Lantern positions, in pairs up the path from the door.
+ *
+ * Measured off the DOOR's own front plane, not the house's bounding box. The
+ * box reaches z 6.65 while the door sits at 3.56, because there is a porch or
+ * step in front of the building -- taking the box for the facade would start
+ * the path three model units out in the air.
+ */
+function lanternPositions(door, scale) {
+  const facade = new THREE.Box3().setFromObject(door).max.z;
+  const positions = [];
+
+  LANTERN_DISTANCES.forEach((distance) => {
+    [-1, 1].forEach((side) => {
+      positions.push(new THREE.Vector3(
+        (side * LANTERN_OFFSET) / scale,
+        LANTERN_HEIGHT / scale,
+        facade + distance / scale,
+      ));
+    });
+  });
+
+  return positions;
+}
+
+function build({ trees, roof, door }, scale) {
   const found = findTrees(trees, scale);
   // Tallest first, so that lighting only the nearest few per plot stays a
   // one-line experiment if 22 decorated trees turns out to read as a
@@ -267,7 +480,13 @@ function build(trees, scale) {
 
   found.sort((a, b) => b.canopy.getSize(size).y - a.canopy.getSize(size).y);
 
-  const bulbs = found.flatMap((tree) => stringFor(tree, scale));
+  // One wire: the tree strings first, then the eave, so the four-colour cycle
+  // carries across from the last tree to the roof the way it carries from one
+  // tree to the next.
+  const bulbs = [
+    ...found.flatMap((tree) => stringFor(tree, scale)),
+    ...(roof ? eaveString(roof, scale) : []),
+  ];
   const positions = new Float32Array(bulbs.length * 3);
   // The base colours are kept so the twinkle can scale them each frame
   // without the rounding drift that repeatedly scaling the live buffer would
@@ -293,6 +512,50 @@ function build(trees, scale) {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+  // The tallest tree, by the height of its tip rather than by the length of
+  // its canopy -- they disagree here. Sorted by canopy length the winner is a
+  // 68-unit tree with 54 units of canopy; by tip height it is a 71-unit tree
+  // whose canopy is only 45. The star belongs on the one that is actually
+  // highest.
+  const crown = found.reduce(
+    (best, tree) => (tree.canopy.max.y > best.canopy.max.y ? tree : best),
+    found[0],
+  );
+  const starGeometry = new THREE.BufferGeometry();
+
+  starGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    crown.centre.x,
+    crown.canopy.max.y + STAR_LIFT / scale,
+    crown.centre.z,
+  ]), 3));
+
+  const starMaterial = new THREE.PointsMaterial({
+    map: createStarTexture(),
+    size: STAR_SIZE,
+    sizeAttenuation: true,
+    color: STAR_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const lanterns = door ? lanternPositions(door, scale) : [];
+  const lanternGeometry = new THREE.BufferGeometry();
+  const lanternArray = new Float32Array(lanterns.length * 3);
+
+  lanterns.forEach((lantern, index) => lantern.toArray(lanternArray, index * 3));
+  lanternGeometry.setAttribute('position', new THREE.BufferAttribute(lanternArray, 3));
+
+  const lanternMaterial = new THREE.PointsMaterial({
+    map: createBulbTexture(),
+    size: LANTERN_SIZE,
+    sizeAttenuation: true,
+    color: LANTERN_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
   const material = new THREE.PointsMaterial({
     map: createBulbTexture(),
     size: BULB_SIZE,
@@ -312,11 +575,32 @@ function build(trees, scale) {
     depthWrite: false,
   });
 
-  return { geometry, material, base, count: bulbs.length, trees: found.length };
+  return {
+    geometry,
+    material,
+    base,
+    count: bulbs.length,
+    trees: found.length,
+    starGeometry,
+    starMaterial,
+    lanternGeometry,
+    lanternMaterial,
+    lanterns: lanterns.length,
+  };
 }
 
 /**
  * One plot's string, as a single THREE.Points.
+ *
+ * Returns a group of three Points -- the twinkling bulbs, the star and the
+ * path lanterns -- which are separate objects for one reason: a
+ * PointsMaterial carries a single size, and these want 7, 16 and 9. All three
+ * geometries are still built once and shared by all five plots, so the town
+ * costs three draw calls per house.
+ *
+ * Only the bulbs twinkle. A twinkling star reads as a faulty bulb where a
+ * steady one reads as the top of the tree, and a lantern that flickers reads
+ * as a fault rather than as a lamp.
  *
  * Built in MODEL units and meant to be added to the plot group, which already
  * carries the scale, the Z-up quarter turn and the house's yaw -- so there is
@@ -329,12 +613,21 @@ function build(trees, scale) {
  * the group sits at the top of the loaded hierarchy, and re-parenting in
  * three.js does not preserve a world transform.
  */
-export function createChristmasLights(trees, scale) {
-  if (!shared) shared = build(trees, scale);
+export function createChristmasLights(pieces, scale) {
+  if (!shared) shared = build(pieces, scale);
 
-  const lights = new THREE.Points(shared.geometry, shared.material);
+  const lights = new THREE.Group();
+  const bulbs = new THREE.Points(shared.geometry, shared.material);
+  const star = new THREE.Points(shared.starGeometry, shared.starMaterial);
+  const lanterns = new THREE.Points(shared.lanternGeometry, shared.lanternMaterial);
 
   lights.name = 'ChristmasLights';
+  bulbs.name = 'Bulbs';
+  star.name = 'Star';
+  lanterns.name = 'Lanterns';
+  lights.add(bulbs);
+  lights.add(star);
+  lights.add(lanterns);
   // frustumCulled is left at its default of true, unlike Snow.js, which turns
   // it off because its band surrounds the camera and the test is wasted work.
   // A plot's string is a compact object on the far side of the map, which is
