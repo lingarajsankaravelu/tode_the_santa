@@ -177,8 +177,8 @@ check he can still reach the doorsteps the spurs in `SnowRoads.js` lead to.
 
 | Budget | Target | Why |
 |---|---|---|
-| Triangles | **≤ 4,000** | `enemy.glb` is 3,200 and reads fine at a smaller scale. Today's 10,740 buys nothing at 32 pixels. The suit is simple shapes; spend the budget on the belly's roundness and the hat, which are silhouette. |
-| File size | **≤ 300 KB** | With no 1 MB texture this is generous. It is a 16× cut from today. |
+| Triangles | **≤ 4,000** | `enemy.glb` is 3,200 and reads fine at a smaller scale. Today's 10,740 buys nothing at 32 pixels, and a denser mesh is slower to weight and messier to sculpt shape keys on. Spend what there is on the belly's roundness and the hat, which are silhouette. |
+| File size | **≤ 300 KB** | Not a bandwidth target — see the note at the end. It is a proxy: a Santa frog that comes in far over this has a bake in it, and a bake is what makes a model unriggable. |
 | Materials | ≤ 6 | One per flat colour. |
 | Texture | **none preferred** | If one is unavoidable, 256×256 is ample. |
 | Bones | ≤ 20 | See below; the list is 11, 12 with the optional belly bone. |
@@ -370,24 +370,23 @@ for what it has.
   is settled, deleting them is the honest cleanup, and `Difficulty.js` loses
   its `spawnDelay` and `enemySpeed` rows with them.
 
-#### Research
+#### A note on the baked texture, which is not about file size
 
-The 1 MB texture on `tode.glb` is worth a wider look than this task takes.
-`public/models/` is **11.95 MB** against a build of 624 KB of JavaScript, so
-the models *are* the download:
+This project is developed and played locally and there is no plan to deploy
+it, so nothing here is a download or bandwidth argument and the models being
+25 MB costs nobody anything. Worth saying plainly, because the 1.59 MB PNG on
+`tode.glb` invites that argument and it is the wrong one.
 
-| Model | Bytes | Share |
-|---|---|---|
-| `winter_country_house.glb` | 5,735,604 | 48.0% |
-| `river_landscape.glb` | 3,915,596 | 32.8% |
-| `tode.glb` | 1,885,796 | 15.8% |
-| `small_house.glb` | 222,652 | 1.9% |
-| `enemy.glb` | 194,404 | 1.6% |
+The reason it matters is what it says about how the model was made. A
+1024×1024 bake for a frog with four flat colours is the output of an
+automatic unwrap and a texture bake, and the same pass is what stripped the
+normals and fused everything into one unnamed mesh. Those are the properties
+that make the model impossible to rig, and they travel together: anything that
+comes through `tools/convert_specular_glossiness.mjs` is likely to arrive in
+the same state.
 
-This spec cuts the third row by roughly 16×, which is about 1.6 MB — a 13% cut
-to the whole download as a side effect of a task that is really about a smile.
-The top two rows are 80% of it and nobody has opened them. Both came through
-`tools/convert_specular_glossiness.mjs`, the same route that left Tode with a
-1 MB bake of four flat colours, so the odds that they carry the same kind of
-waste are good. Measuring them is an afternoon and it is the largest
-performance win left in the project. It belongs in its own task.
+So the instruction in this spec is **author with flat materials, not a bake**
+— not to save bytes, but because a model with named parts and real materials
+is one you can select a jaw on, weight to a bone and give a shape key to. The
+budget numbers above are there to keep the asset simple enough to rig and to
+edit later, which is the only reason they are worth holding to.
