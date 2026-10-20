@@ -13,6 +13,7 @@ import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
 import { updateChristmasLights } from './components/ChristmasLights.js';
+import { updateSmoke } from './components/Smoke.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
 import { createLighting } from './components/Lighting.js';
@@ -114,6 +115,9 @@ renderer.setAnimationLoop(() => {
   // No argument: all five plots share one buffer, so this is one pass for the
   // whole town.
   updateChristmasLights();
+  // Also outside the freeze: a town whose chimneys stop on the Game Over
+  // frame reads as the village dying with Tode.
+  updateSmoke();
 
   renderer.render(scene, camera);
 });

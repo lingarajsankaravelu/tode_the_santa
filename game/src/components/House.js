@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createChristmasLights } from './ChristmasLights.js';
+import { createSmokePlume } from './Smoke.js';
 
 const MODEL_PATH = '/models/winter_country_house.glb';
 // The House group inside the model is 10.85 units tall, so this puts it at
@@ -71,6 +72,9 @@ const BUILDING_NAME = 'House';
 // The conifers, named because visual/christmas_lights needs the group itself
 // and not just its contents -- the light strings are measured off it.
 const TREES_NAME = 'Trees1';
+// The chimney smoke, named for the same reason: Smoke.js animates the group's
+// 19 puffs and needs the group, not its contents.
+const SMOKE_NAME = 'Smoke';
 
 const PROPS = [
   // Twenty-odd conifers clustered off the house's corner. Deliberately NOT
@@ -174,11 +178,6 @@ const WINDOW_MATERIAL = 'Glass';
 // brown.
 const WINDOW_COLOR = 0xffcc77;
 
-// The chimney smoke's single material. Named here because it has to be found
-// by material rather than by node: the puff's 19 meshes are called
-// `polySurface`-something like most of this diorama, and the one thing they
-// have in common is what they are made of.
-const SMOKE_MATERIAL = 'lambert23';
 
 const loader = new GLTFLoader();
 
@@ -228,36 +227,13 @@ function lightTheWindows(source) {
   });
 }
 
-/**
- * Stops the chimney smoke fighting itself, once on the loaded source.
- *
- * The puff is 19 interpenetrating meshes on one translucent material --
- * `lambert23`, a near-white #ececec at 0.38 opacity, double-sided. three.js
- * sorts transparent objects against each other back to front, but it sorts
- * whole objects, and objects that pass through each other have no correct
- * order: with depth writing left on, whichever drew first rejects the parts of
- * the others behind it, and which one that is flips as the camera swings
- * round. The puff visibly reshuffles while Tode hops.
- *
- * Turning depth WRITING off leaves depth TESTING on, so the house still hides
- * the smoke where it should and the alpha simply accumulates through the puff,
- * which is what smoke does anyway.
- */
-function settleTheSmoke(source) {
-  source.traverse((child) => {
-    if (!child.isMesh) return;
-    if (child.material?.name !== SMOKE_MATERIAL) return;
-
-    child.material.depthWrite = false;
-  });
-}
-
 function createHouse(source, angle) {
   const house = new THREE.Group();
   const plot = new THREE.Group();
 
   const building = takePiece(source, plot, BUILDING_NAME);
   let trees = null;
+  let smoke = null;
 
   PROPS.forEach(({ name, offset, exclude }) => {
     const prop = takePiece(source, plot, name, exclude);
@@ -268,6 +244,7 @@ function createHouse(source, angle) {
     prop.position.z += offset.z;
 
     if (name === TREES_NAME) trees = prop;
+    if (name === SMOKE_NAME) smoke = prop;
   });
 
   if (trees) {
@@ -284,6 +261,12 @@ function createHouse(source, angle) {
     // hears about it.
     plot.add(createChristmasLights(trees, MODEL_SCALE));
   }
+
+  // Registers this chimney with Smoke.js, which animates all five from one
+  // timer. Nothing is added to the plot -- the puff is already in it -- so
+  // unlike the lights above this does not care when it is called, only that
+  // the smoke has been re-homed.
+  if (smoke) createSmokePlume(smoke, MODEL_SCALE);
 
   plot.scale.setScalar(MODEL_SCALE);
   // Z is up in this game and the .glb is Y-up, the same quarter turn every
@@ -335,7 +318,6 @@ function createHouse(source, angle) {
 export function createHouses(map) {
   loader.load(MODEL_PATH, (gltf) => {
     lightTheWindows(gltf.scene);
-    settleTheSmoke(gltf.scene);
 
     const spread = THREE.MathUtils.degToRad(TOWN_SPREAD_DEGREES);
 
