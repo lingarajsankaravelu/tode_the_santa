@@ -30,15 +30,31 @@ const MODEL_SCALE = 7.4;
 // with no snow on it.
 const BUILDING_NAME = 'House';
 
-// Each kept prop, with the nudge that brings it into its own house's yard.
+// Each kept prop. Every one of them is now left exactly where the artist put
+// it, and the offsets are kept at zero rather than removed because getting one
+// of them wrong is a specific, easy mistake -- see the sign note below.
+//
 // Offsets are in model units and are applied before the scale, so they read at
-// the same size as the measurements above.
+// the same size as the measurements above. **The front of the house is model
+// +Z.** The model faces -Y in game space at a yaw of zero, which is why
+// MODEL_BASE_ROTATION exists, and after the Z-up quarter turn model +Z is the
+// direction that ends up pointing at the origin -- so a POSITIVE z offset
+// moves a prop out towards the field and a negative one pushes it round the
+// back. Confirmed by transforming the basis vectors rather than reasoned
+// about: model +Z comes out as world (-1, 0, 0) for the house at angle 0,
+// which sits at world (480, 0), so +Z is towards the middle of the map.
 //
 // Two of these are not whole groups, and that is deliberate -- measuring the
 // groups alone is misleading:
 //  - The snowman is `polySurface538` specifically. Its parent `SnowMan` group
 //    also holds a bucket and some odds and ends scattered near the diorama's
-//    origin, and the snowman itself stands 39.9 units away from the house.
+//    origin. That group's spread is where the "39.9 units from the house"
+//    figure came from, and it is the wrong measurement: the snowman mesh on
+//    its own already stands 26 world units off the front wall, which is the
+//    front yard. It is the reason this entry carried an offset of
+//    `{ x: -1, z: -30 }` for a while -- a pull of 30 towards a house that was
+//    only 4 model units away, in the direction that goes through it, which put
+//    a snowman 196 units behind all five houses.
 //  - `Kolodec` is the well, but 118.6 of its 119-unit span is one child,
 //    `pCylinder14` -- a pond or path lying 58 units off. Dragging that into
 //    every plot would put a 878-unit slab through the town, so it is excluded
@@ -55,7 +71,12 @@ const PROPS = [
   // be. At (66, 72) world units from the house they already read as beside it.
   { name: TREES_NAME, offset: { x: 0, z: 0 } },
   { name: 'Kolodec', offset: { x: 0, z: 0 }, exclude: ['pCylinder14'] },
-  { name: 'polySurface538', offset: { x: -1, z: -30 } },
+  // The snowman, in the front yard where it was modelled: 26 world units off
+  // the front wall, 12 clear of the nearest conifer and 72 clear of the well.
+  // It stands 28 units to one side of the plot's own radius, which is where
+  // visual/snow_roads will run a 36-wide spur to the door -- so it clears that
+  // path by 10 units, and if SPUR_WIDTH grows, this is the prop it hits first.
+  { name: 'polySurface538', offset: { x: 0, z: 0 } },
   // Lying snow: the roof, and caps on the trees and posts. Left unmoved for
   // the same reason the trees are.
   { name: 'Snow', offset: { x: 0, z: 0 } },
