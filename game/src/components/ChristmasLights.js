@@ -79,6 +79,23 @@ const EAVE_DROP = 2;
 // And forward of it, for the same reason BULB_OUTSET exists.
 const EAVE_OUT = 1.5;
 
+// The star on the tallest tree in the yard, which is what makes a plot read as
+// decorated rather than merely lit.
+//
+// It cannot share the bulbs' material, and that is not a shortcut: a
+// PointsMaterial carries ONE size for every point it draws, and per-point
+// sizing needs a custom shader. visual/house_decorations says to put the star
+// "in the same geometry as the string" and also to make it 16 units against
+// the bulbs' 7, and those two instructions cannot both hold. The size is the
+// one that matters, so the star is its own one-point Points -- still built
+// once and shared by all five plots, so it costs one draw call per plot.
+const STAR_SIZE = 16;
+// Above the tip, so it sits on the tree rather than in it.
+const STAR_LIFT = 3;
+// Warm white. Deliberately not one of the four COLORS: a star that is the
+// same red or green as the string is not a star, it is a bulb that got lost.
+const STAR_COLOR = 0xfff4d0;
+
 // World units, and this is the one constant here that does NOT ride the plot's
 // scale. gl_PointSize is computed from the material's size and the view
 // distance alone, so an object's scale does not reach it -- everything else in
@@ -155,6 +172,58 @@ function createBulbTexture() {
 
   context.fillStyle = gradient;
   context.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  return texture;
+}
+
+/**
+ * A four-point glint, as a 32px sprite.
+ *
+ * A cross of two tapered bars over a hot core. At the 7 to 15 pixels this is
+ * ever drawn at, that is indistinguishable from a modelled star and costs a
+ * canvas instead of geometry.
+ */
+function createStarTexture() {
+  const size = 32;
+  const canvas = document.createElement('canvas');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext('2d');
+  const middle = size / 2;
+  const core = context.createRadialGradient(middle, middle, 0, middle, middle, middle * 0.55);
+
+  core.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  core.addColorStop(0.4, 'rgba(255, 255, 255, 0.75)');
+  core.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = core;
+  context.fillRect(0, 0, size, size);
+
+  // The two spikes. Drawn as thin bars with a gradient that fades at both
+  // ends, which is what gives the star its points.
+  const across = context.createLinearGradient(0, 0, size, 0);
+
+  across.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  across.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+  across.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = across;
+  context.fillRect(0, middle - 1.5, size, 3);
+
+  const down = context.createLinearGradient(0, 0, 0, size);
+
+  down.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  down.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+  down.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  context.fillStyle = down;
+  context.fillRect(middle - 1.5, 0, 3, size);
 
   const texture = new THREE.CanvasTexture(canvas);
 
@@ -390,6 +459,33 @@ function build({ trees, roof }, scale) {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+  // The tallest tree, by the height of its tip rather than by the length of
+  // its canopy -- they disagree here. Sorted by canopy length the winner is a
+  // 68-unit tree with 54 units of canopy; by tip height it is a 71-unit tree
+  // whose canopy is only 45. The star belongs on the one that is actually
+  // highest.
+  const crown = found.reduce(
+    (best, tree) => (tree.canopy.max.y > best.canopy.max.y ? tree : best),
+    found[0],
+  );
+  const starGeometry = new THREE.BufferGeometry();
+
+  starGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    crown.centre.x,
+    crown.canopy.max.y + STAR_LIFT / scale,
+    crown.centre.z,
+  ]), 3));
+
+  const starMaterial = new THREE.PointsMaterial({
+    map: createStarTexture(),
+    size: STAR_SIZE,
+    sizeAttenuation: true,
+    color: STAR_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
   const material = new THREE.PointsMaterial({
     map: createBulbTexture(),
     size: BULB_SIZE,
@@ -409,11 +505,24 @@ function build({ trees, roof }, scale) {
     depthWrite: false,
   });
 
-  return { geometry, material, base, count: bulbs.length, trees: found.length };
+  return {
+    geometry,
+    material,
+    base,
+    count: bulbs.length,
+    trees: found.length,
+    starGeometry,
+    starMaterial,
+  };
 }
 
 /**
  * One plot's string, as a single THREE.Points.
+ *
+ * Returns a group of two Points: the twinkling bulbs, and the star, which has
+ * to be separate because they need different sizes. The star is deliberately
+ * left out of the twinkle -- a twinkling star reads as a faulty bulb, where a
+ * steady one reads as the top of the tree.
  *
  * Built in MODEL units and meant to be added to the plot group, which already
  * carries the scale, the Z-up quarter turn and the house's yaw -- so there is
@@ -429,9 +538,15 @@ function build({ trees, roof }, scale) {
 export function createChristmasLights(pieces, scale) {
   if (!shared) shared = build(pieces, scale);
 
-  const lights = new THREE.Points(shared.geometry, shared.material);
+  const lights = new THREE.Group();
+  const bulbs = new THREE.Points(shared.geometry, shared.material);
+  const star = new THREE.Points(shared.starGeometry, shared.starMaterial);
 
   lights.name = 'ChristmasLights';
+  bulbs.name = 'Bulbs';
+  star.name = 'Star';
+  lights.add(bulbs);
+  lights.add(star);
   // frustumCulled is left at its default of true, unlike Snow.js, which turns
   // it off because its band surrounds the camera and the test is wasted work.
   // A plot's string is a compact object on the far side of the map, which is
