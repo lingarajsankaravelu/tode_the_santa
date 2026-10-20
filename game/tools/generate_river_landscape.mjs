@@ -1,5 +1,11 @@
 // Procedural low-poly river landscape -> public/models/river_landscape.glb
-// No deps: writes glTF 2.0 binary by hand. Flat-shaded, vertex-coloured.
+// No deps: writes glTF 2.0 binary by hand. Vertex-coloured.
+//
+// Flat-shaded, EXCEPT the two white surfaces: the snow bed and the mountains
+// are smooth-shaded, with a normal and a colour at every corner. Flat shading
+// is the low-poly look and it is right for earth, rock, pines and boulders, but
+// on anything near-white every triangle takes a visibly different amount of
+// light and you see each one. See smoothTri().
 // Regenerate with:  node tools/generate_river_landscape.mjs
 
 import { writeFileSync, mkdirSync } from 'node:fs'
@@ -26,23 +32,80 @@ const hex = (h, jitter = 0) => {
   return [16, 8, 0].map((s) => srgbToLinear(Math.min(1, (((h >> s) & 255) / 255) * k)))
 }
 
-const GRASS = 0x6ead4a
-const GRASS_DARK = 0x4e8c3a
 const SAND = 0xc2b280
 const ROCK = 0x8a8577
+// The ground beneath the snow. It is mostly not seen -- only the river bed, the
+// wet bank and the steep faces that shed their snow -- so it is frozen earth
+// rather than the grass it used to be. A green field showing through the gaps
+// in a snowfield is worse than no gaps at all.
+const EARTH = 0x6a6355
 const BARK = 0x6b4a2f
 const PINE = 0x2f6b3f
 const PINE_LIGHT = 0x3d8a4d
 const WATER = 0x3f8fd4
+// SNOW and SNOW_SHADE are the mountain caps, and the ground deliberately does
+// not reuse them: fields the same white as the peaks dissolve the horizon, and
+// the mountains stop reading as distance. The ground pair is a little cooler
+// and darker so the caps still separate from the snowfield they stand in.
 const SNOW = 0xf2f4f7
 const SNOW_SHADE = 0xd4e0ec
-const PETAL_P = 0x9b5fc0
-const PETAL_Y = 0xe8c54a
+// The same white as the snow on the house's roof, which is where this number
+// comes from: winter_country_house.glb's Snow2 material is baseColorFactor
+// [1,1,1,1] with no vertex colours and no textures in the file at all, so the
+// roof snow is flat 0xffffff lit by nothing but its own shape. The snow bed now
+// carries the identical colour against the identical material -- metallic 0,
+// roughness 1 -- so the two are the same material in the same light, and the
+// bed's appearance is carried entirely by its relief and its smooth normals.
+//
+// Earlier versions tinted this (a cool white over a blue-grey hollow, blended
+// by the drift field). It was a reasonable idea and it is deliberately gone:
+// asked to match the roof, the answer is to match the roof.
+const GROUND_SNOW = 0xffffff
+
+// Snow does not read as snow from a flat colour the way grass reads as grass.
+// The eye accepts a flat green plane as a lawn; it reads a flat white plane as
+// paper. The first attempt at this recoloured the fields and relied on the
+// per-face hex() jitter for texture, and that does not work: the jitter is
+// high-frequency noise, and at the distance the camera sits -- every triangle
+// is 37 world units against a view 2500 units deep -- it averages straight
+// back to flat white. The play area makes it worse, being guaranteed dead flat
+// out to FLAT_R: all 1725 basin faces share the single normal (0,-1,0), so
+// there is no geometric shading there at all and colour is carrying everything.
+//
+// So the fields take a smooth drift field as well: broad bright crests and
+// cool hollows varying over tens of units, which is the form snow actually has.
+// Tuned by measurement, not by eye: these frequencies put a light-to-dark patch
+// every 174 world units across X and 349 across Z, so two to four hops of
+// Tode's 80 cross one. Deliberately anisotropic -- equal frequencies gave an
+// even blotch, and drifts lie along a wind direction. An earlier pass used a
+// third of these and put only two patches across the whole basin, which is a
+// single gradient rather than snow.
+// Colour only, and deliberately so -- real drifts are geometry, and raising the
+// snow where Tode walks would push the ground up through his feet and break the
+// flat-basin agreement Landscape.js has with WORLD_RADIUS.
+const drift = (x, z) => {
+  const d = 0.5
+    + 0.30 * Math.sin(x * 0.38 + 0.4) * Math.cos(z * 0.32)
+    + 0.13 * Math.sin(x * 0.78 - z * 0.63 + 1.1)
+    + 0.07 * Math.cos(x * 1.55 + z * 1.24)
+  return Math.max(0, Math.min(1, d))
+}
+
+// Blends in sRGB byte space, which is where the palette is written.
+const mixHex = (a, b, t) => [16, 8, 0].reduce((out, s) => {
+  const av = (a >> s) & 255
+  const bv = (b >> s) & 255
+  return out | (Math.round(av + (bv - av) * t) << s)
+}, 0)
+
+// mixHex survives because the mountains use it for their snow line. drift()
+// survives too, but only as relief now -- see snowY().
 
 // --------------------------------------------------------------- mesh buffer
 const mesh = () => ({ pos: [], nrm: [], col: [] })
 const land = mesh()
 const water = mesh()
+const snow = mesh()
 
 function tri (m, a, b, c, color) {
   const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2]
@@ -57,6 +120,27 @@ function tri (m, a, b, c, color) {
   }
 }
 const quad = (m, a, b, c, d, color) => { tri(m, a, b, c, color); tri(m, a, c, d, color) }
+
+// A triangle carrying its own normal and colour at each corner, for a surface
+// that has to read as smooth rather than faceted.
+//
+// This is the difference between the snow bed and the snow on the house, and it
+// is why three passes of colour work never fixed the ground. tri() above gives
+// every triangle one normal and one colour -- flat shading, which is the whole
+// low-poly look and is right for earth and rock. On a near-white surface it is
+// ruinous: each triangle takes a visibly different amount of light and you see
+// every one of them, which is exactly the "triangles instead of snow" that kept
+// coming back. The house's own Snow2 mesh is 11,988 vertices carrying 22,769
+// triangles -- shared corners, averaged normals, a continuous surface. The snow
+// bed needs the same, and since snowY() is an analytic function its normals can
+// simply be evaluated rather than averaged.
+function smoothTri (m, verts, normals, colors) {
+  for (let i = 0; i < 3; i += 1) {
+    m.pos.push(verts[i][0], verts[i][1], verts[i][2])
+    m.nrm.push(normals[i][0], normals[i][1], normals[i][2])
+    m.col.push(colors[i][0], colors[i][1], colors[i][2])
+  }
+}
 
 // ------------------------------------------------------------------- terrain
 const SIZE = 40          // half-extent of the ground plane
@@ -105,28 +189,171 @@ function height (x, z) {
   return h * basinWeight(x, z)
 }
 
-const gridPt = (i, j) => {
-  const x = -SIZE + (i / GRID) * SIZE * 2
-  const z = -SIZE + (j / GRID) * SIZE * 2
-  return [x, height(x, z), z]
+// ------------------------------------------------------------------ snow bed
+// A second surface lying on top of the terrain, the way the snow on the house
+// is its own layer over the roof rather than a white roof.
+//
+// Recolouring the ground was tried first, twice, and it does not work: a flat
+// white plane reads as paper however it is tinted, because what makes snow look
+// like snow is a surface of its own, with its own thickness, catching the light
+// at its own angles. No amount of vertex colour supplies that on a plane whose
+// 1712 basin faces all share one normal.
+//
+// SNOW_DEPTH is how deep the snow lies. The terrain is lowered by it and the
+// snow surface laid at the old terrain line, so the snow goes in *under* Tode's
+// feet rather than on top of them -- the level he walks on does not move, and
+// the flat-basin agreement with WORLD_RADIUS survives untouched. At the import
+// scale of 41 this is 12 world units, about a foot of snow.
+const SNOW_DEPTH = 0.30
+// Relief in the snow surface itself, which is the thing that actually reads.
+// Inside the basin it may only ever dip *below* the walk plane, and only
+// slightly: Tode has no ground-following, so every unit of hollow is a unit he
+// hovers over. 0.06 is 2.5 world units, against his 102 units of height.
+// Outside FLAT_R he cannot go at all -- WORLD_RADIUS is exactly the basin edge
+// -- so the drifts out there are free to be real geometry, and they are most of
+// what the camera actually sees.
+const SNOW_RELIEF_BASIN = 0.06
+const SNOW_RELIEF_HILLS = 0.55
+
+// Snow does not lie on water, and it slides off anything steep -- which is what
+// leaves the rock faces bare and gives the hills back their shape. Without this
+// the snow layer would shrink-wrap the terrain and lose every silhouette on it.
+function snowCover (x, z) {
+  const d = Math.abs(x - riverX(z))
+  if (d < BANK * 1.9) return 0
+  const e = 0.35
+  const slope = Math.hypot(height(x + e, z) - height(x - e, z),
+                           height(x, z + e) - height(x, z - e)) / (2 * e)
+  const edge = Math.min(1, (d - BANK * 1.9) / (BANK * 0.9))
+  return Math.max(0, edge * (1 - Math.min(1, slope / 1.1)))
 }
+
+// Below this much cover the snow is not drawn at all, rather than drawn as a
+// film too thin to win a depth test. 0.12 of SNOW_DEPTH is 1.5 world units of
+// snow, which is the thinnest edge worth keeping: measured against the depth
+// buffer it is 37 times the resolution at the far edge of the map, where the
+// faces that were failing had thinned to under one unit. Belt and braces with
+// Camera.js's near plane -- that fix alone is enough, but a surface this large
+// should not be relying on a single setting elsewhere to stay visible.
+const COVER_MIN = 0.12
+
+// Soft lumps in the surface, on a wavelength of about 3.1 model units -- three
+// and a bit grid cells, so the grid can actually resolve them.
+//
+// This replaces a near-random per-vertex value at a wavelength BELOW one cell.
+// That aliased into something different at every corner, which was the right
+// idea for a faceted surface and the wrong one here: nothing smaller than a
+// cell can be shaded smoothly, because there are no vertices in between to
+// carry the curve. Band-limited, it reads as lumpy snow; sub-cell, it read as
+// triangles.
+const lumps = (x, z) => 0.5 + 0.5 * Math.sin(x * 2.1 + 1.7) * Math.cos(z * 1.9 - 0.6)
+
+// Where the snow is drawn, with single-cell holes filled in. A lone bare cell
+// in the middle of a snowfield is not rock showing through, it is a stray
+// earth-coloured triangle in a white field -- which is the exact artifact this
+// pass exists to remove, so it is not left to chance. Two of them appeared at
+// COVER_MIN before this went in.
+const GRID_STEP = (SIZE * 2) / GRID
+function snowHere (x, z) {
+  if (snowCover(x, z) >= COVER_MIN) return true
+
+  let neighbours = 0
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (snowCover(x + dx * GRID_STEP, z + dz * GRID_STEP) >= COVER_MIN) neighbours += 1
+  }
+
+  return neighbours >= 3
+}
+
+// The terrain, dropped by the depth of the snow now sitting on it.
+const landY = (x, z) => height(x, z) - SNOW_DEPTH
+
+function snowY (x, z) {
+  // Inside the snow region the thickness has a floor, so a filled hole or a
+  // boundary vertex cannot end up as a film too thin to win a depth test.
+  // Outside it the raw value stands, so the surface still tapers into the land
+  // rather than ending on a step.
+  const raw = snowCover(x, z)
+  const cover = snowHere(x, z) ? Math.max(COVER_MIN, raw) : raw
+  const amp = SNOW_RELIEF_BASIN +
+    (SNOW_RELIEF_HILLS - SNOW_RELIEF_BASIN) * basinWeight(x, z)
+  // Both terms are subtracted, so the surface can never rise above the old
+  // terrain line. That is what keeps the basin a floor rather than a hazard.
+  const dip = (1 - drift(x, z)) + 0.18 * lumps(x, z)
+  // Tapers to nothing as cover falls away, so the snow thins out at the water's
+  // edge and on the rock instead of ending in a cliff that needs a side wall.
+  return height(x, z) - SNOW_DEPTH * (1 - cover) - amp * dip * cover
+}
+
+// The surface is y = snowY(x, z), so its normal is (-dy/dx, 1, -dy/dz).
+// Evaluated rather than averaged from the faces: the function is analytic, and
+// a central difference over a fifth of a cell is both cheaper and smoother than
+// collecting the neighbours of every vertex.
+const SNOW_EPS = 0.18
+function snowNormal (x, z) {
+  const dydx = (snowY(x + SNOW_EPS, z) - snowY(x - SNOW_EPS, z)) / (2 * SNOW_EPS)
+  const dydz = (snowY(x, z + SNOW_EPS) - snowY(x, z - SNOW_EPS)) / (2 * SNOW_EPS)
+  const len = Math.hypot(dydx, 1, dydz)
+
+  return [-dydx / len, 1 / len, -dydz / len]
+}
+
+const gridX = (i) => -SIZE + (i / GRID) * SIZE * 2
+const landPt = (i, j) => { const x = gridX(i), z = gridX(j); return [x, landY(x, z), z] }
+const snowPt = (i, j) => { const x = gridX(i), z = gridX(j); return [x, snowY(x, z), z] }
 
 for (let i = 0; i < GRID; i++) {
   for (let j = 0; j < GRID; j++) {
-    const a = gridPt(i, j), b = gridPt(i + 1, j), c = gridPt(i + 1, j + 1), d = gridPt(i, j + 1)
     // Split each cell on alternating diagonals: breaks up the grid read.
-    const faces = (i + j) % 2 ? [[a, b, c], [a, c, d]] : [[a, b, d], [b, c, d]]
+    const diag = (i + j) % 2
+
+    // --- the ground, which is now mostly underneath the snow ---
+    const a = landPt(i, j), b = landPt(i + 1, j)
+    const c = landPt(i + 1, j + 1), d = landPt(i, j + 1)
+    const faces = diag ? [[a, b, c], [a, c, d]] : [[a, b, d], [b, c, d]]
     for (const f of faces) {
       const my = (f[0][1] + f[1][1] + f[2][1]) / 3
       const mx = (f[0][0] + f[1][0] + f[2][0]) / 3
       const mz = (f[0][2] + f[1][2] + f[2][2]) / 3
       const dist = Math.abs(mx - riverX(mz))
-      let base = GRASS
-      if (my < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND            // riverbed
-      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : GRASS_DARK   // banks
-      else if (my > 2.2) base = rnd() < 0.5 ? ROCK : GRASS_DARK            // high ground
-      else if (rnd() < 0.3) base = GRASS_DARK
+      // Measured against the terrain line, not the lowered surface: these two
+      // thresholds were chosen against height() and the whole grid now sits
+      // SNOW_DEPTH below it, which would quietly widen the river bed and shrink
+      // the high ground by that much.
+      const hy = my + SNOW_DEPTH
+      // Earth tones throughout. This surface is seen only where the snow is
+      // not: the river bed, the wet bank, and the faces too steep to hold it.
+      let base = EARTH
+      if (hy < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND          // riverbed
+      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : EARTH      // banks
+      else if (hy > 2.2) base = rnd() < 0.5 ? ROCK : EARTH               // high ground
       tri(land, f[0], f[1], f[2], hex(base, 0.09))
+    }
+
+    // --- the snow lying on it ---
+    // Each corner carries its own position, normal and colour, so the four
+    // triangles meeting at a vertex all agree there and the surface shades as
+    // one piece. No per-face colour jitter either: a jitter is a discontinuity
+    // at every edge, and it would draw the triangles back in just as clearly as
+    // a per-face normal does.
+    const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([ci, cj]) => {
+      const x = gridX(ci), z = gridX(cj)
+
+      return { p: [x, snowY(x, z), z], n: snowNormal(x, z), c: hex(GROUND_SNOW) }
+    })
+    const [sa, sb, sc, sd] = corners
+    // Wound the opposite way round to the land, so the winding agrees with the
+    // normals above. The land grid's all point down and survive only because
+    // its material is doubleSided; the surface the whole scene is lit through
+    // should not be relying on that.
+    const sfaces = diag ? [[sa, sc, sb], [sa, sd, sc]] : [[sa, sd, sb], [sb, sd, sc]]
+    for (const f of sfaces) {
+      const mx = (f[0].p[0] + f[1].p[0] + f[2].p[0]) / 3
+      const mz = (f[0].p[2] + f[1].p[2] + f[2].p[2]) / 3
+      // No face at all where the snow has tapered away, rather than a
+      // degenerate one lying in the ground z-fighting it.
+      if (!snowHere(mx, mz)) continue
+      smoothTri(snow, f.map((v) => v.p), f.map((v) => v.n), f.map((v) => v.c))
     }
   }
 }
@@ -231,32 +458,98 @@ function mountain (m, cx, cz, baseY, radius, h, seg) {
     cz + rng(-radius * 0.1, radius * 0.1)
   ]
 
-  const faceColor = (y, i) => {
-    const line = snowLine + colSnow[i]
-    if (y > line + h * 0.06) return hex(rnd() < 0.78 ? SNOW : SNOW_SHADE, 0.05)
-    if (y > line - h * 0.06) return hex(rnd() < 0.5 ? SNOW_SHADE : ROCK, 0.1) // patchy transition
-    return hex(ROCK, 0.14)
-  }
+  // Smooth-shaded, for the same reason the snow bed is: a flat-shaded white cap
+  // shows every one of its triangles. The ridges are kept by the geometry --
+  // colR varies the width of each column and colSnow ragged-edges its snow line
+  // -- so the mountains stay angular crags without the shading breaking into
+  // facets across the snow.
+  //
+  // Built as a vertex list plus a face list so the normals can be averaged at
+  // the corners. Unlike the snow bed there is no analytic surface to
+  // differentiate here, the rings being a stack of jittered rows.
+  const verts = []
+  const cols = []
+  const rowIdx = rings.map((r, l) => r.map((pt, i) => {
+    verts.push(pt)
+    cols.push(i)
 
+    return verts.length - 1
+  }))
+
+  verts.push(apex)
+  cols.push(0)
+  const apexIdx = verts.length - 1
+
+  const faces = []
   for (let l = 0; l < rings.length - 1; l++) {
-    const lo = rings[l], hi = rings[l + 1]
     for (let i = 0; i < seg; i++) {
       const n = (i + 1) % seg
-      // Split the quad so each triangle can take the snow line separately.
-      tri(m, lo[i], lo[n], hi[n], faceColor((lo[i][1] + lo[n][1] + hi[n][1]) / 3, i))
-      tri(m, lo[i], hi[n], hi[i], faceColor((lo[i][1] + hi[n][1] + hi[i][1]) / 3, i))
+      faces.push([rowIdx[l][i], rowIdx[l][n], rowIdx[l + 1][n]])
+      faces.push([rowIdx[l][i], rowIdx[l + 1][n], rowIdx[l + 1][i]])
     }
   }
-  for (let i = 0; i < seg; i++) {
-    const n = (i + 1) % seg
-    tri(m, top[i], top[n], apex, faceColor(apex[1], i))
+  const topRow = rowIdx[rowIdx.length - 1]
+  for (let i = 0; i < seg; i++) faces.push([topRow[i], topRow[(i + 1) % seg], apexIdx])
+
+  const normals = verts.map(() => [0, 0, 0])
+  for (const [ia, ib, ic] of faces) {
+    const a = verts[ia], b = verts[ib], c = verts[ic]
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2]
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]
+    const fn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    for (const k of [ia, ib, ic]) {
+      normals[k][0] += fn[0]; normals[k][1] += fn[1]; normals[k][2] += fn[2]
+    }
   }
-  // Cap the base so the silhouette stays solid from low angles.
-  for (let i = 1; i < seg - 1; i++) tri(m, rings[0][0], rings[0][i + 1], rings[0][i], hex(ROCK, 0.1))
+
+  const smoothed = normals.map((nm, k) => {
+    const len = Math.hypot(nm[0], nm[1], nm[2]) || 1
+    // Turned outwards from the column's own axis if the winding came out the
+    // other way, so one sign error cannot light a whole range from the inside.
+    // The apex sits on the axis, which is what the radius term is for.
+    const ref = [verts[k][0] - cx, radius * 0.5, verts[k][2] - cz]
+    const sign = (nm[0] * ref[0] + nm[1] * ref[1] + nm[2] * ref[2]) < 0 ? -1 : 1
+
+    return [sign * nm[0] / len, sign * nm[1] / len, sign * nm[2] / len]
+  })
+
+  // Per vertex, not per face, and blended across the line rather than decided
+  // by a coin toss per triangle: the jitter is evaluated once for each corner,
+  // so every triangle meeting there agrees and the variation interpolates as a
+  // gradient instead of breaking into patches. The ragged line survives in
+  // colSnow, which is per column.
+  const colors = verts.map((pt, k) => {
+    const line = snowLine + colSnow[cols[k]]
+    const t = Math.min(1, Math.max(0, (pt[1] - (line - h * 0.06)) / (h * 0.12)))
+
+    return hex(mixHex(ROCK, SNOW, t * t * (3 - 2 * t)), 0.07)
+  })
+
+  for (const [ia, ib, ic] of faces) {
+    smoothTri(m,
+      [verts[ia], verts[ib], verts[ic]],
+      [smoothed[ia], smoothed[ib], smoothed[ic]],
+      [colors[ia], colors[ib], colors[ic]])
+  }
+  // Cap the base so the silhouette stays solid from low angles. Takes the same
+  // smoothed normals and colours as the bottom ring rather than a flat normal
+  // of its own: the cap shares every one of its corners with the flank, and a
+  // flat fan there was the one remaining disagreement on the whole mountain --
+  // 89.6 degrees of it, right on the base rim. The shading it gets is not what
+  // a downward-facing fan should have, which costs nothing on a surface that
+  // faces away from the camera and into the ground.
+  for (let i = 1; i < seg - 1; i++) {
+    const ring0 = [rowIdx[0][0], rowIdx[0][i + 1], rowIdx[0][i]]
+
+    smoothTri(m,
+      ring0.map((k) => verts[k]),
+      ring0.map((k) => smoothed[k]),
+      ring0.map((k) => colors[k]))
+  }
 }
 
 function pine (m, x, z) {
-  const y = height(x, z)
+  const y = snowY(x, z)
   const th = rng(0.55, 0.95)
   prism(m, x, z, y - 0.15, rng(0.1, 0.16), th, 5, BARK)
   const tiers = 3
@@ -268,22 +561,6 @@ function pine (m, x, z) {
     ty += hgt * 0.52
     r *= 0.72
     hgt *= 0.85
-  }
-}
-
-function flower (m, x, z) {
-  const y = height(x, z)
-  const h = rng(0.22, 0.38)
-  const color = rnd() < 0.5 ? PETAL_P : PETAL_Y
-  prism(m, x, z, y, 0.025, h, 3, PINE)
-  const head = y + h
-  const r = rng(0.1, 0.16)
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2
-    const b = ((i + 1) / 4) * Math.PI * 2
-    tri(m, [x, head + 0.07, z],
-           [x + Math.cos(a) * r, head, z + Math.sin(a) * r],
-           [x + Math.cos(b) * r, head, z + Math.sin(b) * r], hex(color, 0.1))
   }
 }
 
@@ -306,7 +583,8 @@ for (let n = 0, guard = 0; n < 55 && guard < 7000; guard++) {
   const side = rnd() < 0.5 ? -1 : 1
   const x = riverX(z) + side * rng(BANK * 1.2, BANK * 2.3)
   if (!inBounds(x, z)) continue
-  const y = height(x, z)
+  // On whichever is higher: snow where it lies, bare bank where it does not.
+  const y = Math.max(snowY(x, z), landY(x, z))
   rock(land, x, y + rng(0.0, 0.15), z, rng(0.18, 0.45), ROCK); n++
 }
 
@@ -317,12 +595,9 @@ for (let n = 0, guard = 0; n < 7 && guard < 500; guard++) {
   rock(land, x, WATER_Y + rng(-0.05, 0.2), z, rng(0.2, 0.38), ROCK); n++
 }
 
-// Wildflowers.
-for (let n = 0, guard = 0; n < 170 && guard < 16000; guard++) {
-  const x = rng(-SIZE + 2, SIZE - 2), z = rng(-SIZE + 2, SIZE - 6)
-  if (inBasin(x, z) || nearRiver(x, z) || height(x, z) < WATER_Y + 0.7) continue
-  flower(land, x, z); n++
-}
+// No wildflowers. There were 170 of them in purple and yellow, which is the
+// single most obviously wrong thing in a snowfield, and the flower() builder
+// went with them rather than being left behind unused.
 
 // Angular snow-capped mountains along the far edge.
 for (let i = 0; i < 14; i++) {
@@ -356,10 +631,21 @@ const json = { asset: { version: '2.0', generator: 'tod_the_frog procedural low-
   meshes: [{ name: 'RiverLandscape', primitives: [] }],
   materials: [], accessors: [], bufferViews: [], buffers: [] }
 
+// Roughness is a flat 1, not 0.95. At 0.95 a near-white surface this large
+// keeps a broad specular sheen, and it is why the snowfield read as glossy
+// white plastic next to the house, whose own Snow2 material is roughness 1.
+// There is no sun disc in this scene to catch a highlight, so the sheen buys
+// nothing and costs the matte surface snow needs.
 json.materials.push({ name: 'Landscape', doubleSided: true,
-  pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.95 } })
+  pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 } })
 json.materials.push({ name: 'Water', doubleSided: true, alphaMode: 'BLEND',
   pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 0.78], metallicFactor: 0.05, roughnessFactor: 0.15 } })
+// Roughness a flat 1, like the house's own Snow2 material. At 0.95 a near-white
+// surface this large keeps a broad specular sheen, and that sheen is why the
+// first attempt read as glossy white plastic. There is no sun disc in this
+// scene for a highlight to catch, so it buys nothing.
+json.materials.push({ name: 'Snow', doubleSided: true,
+  pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 } })
 
 function addPrimitive (m, material) {
   const attrs = {}
@@ -382,6 +668,7 @@ function addPrimitive (m, material) {
 
 addPrimitive(land, 0)
 addPrimitive(water, 1)
+addPrimitive(snow, 2)
 
 const bin = Buffer.concat(chunks)
 json.buffers.push({ byteLength: bin.length })
@@ -403,6 +690,7 @@ writeFileSync(OUT, Buffer.concat([
   chunkHdr(bin.length, 'BIN\0'), bin
 ]))
 
-const tris = (land.pos.length + water.pos.length) / 9
+const tris = (land.pos.length + water.pos.length + snow.pos.length) / 9
 console.log(`wrote ${OUT}`)
 console.log(`  ${tris} triangles, ${(12 + 8 + jsonBuf.length + 8 + bin.length / 1)} bytes`)
+console.log(`  snow layer: ${snow.pos.length / 9} triangles`)
