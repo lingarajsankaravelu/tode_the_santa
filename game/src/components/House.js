@@ -96,7 +96,8 @@ const MODEL_BASE_ROTATION = Math.PI;
 // and the tree trunks are buried by. Deliberately NOT lifted by -box.min.z the
 // way a single model is: the house's lowest point is at -3.48, so grounding on
 // it would raise the whole plot and leave the trees and the snowman floating
-// 26 units in the air.
+// 26 units in the air. Checked in the browser rather than left to the
+// reasoning: at zero the houses sit on the ground.
 const PLOT_Z = 0;
 
 const loader = new GLTFLoader();

@@ -122,6 +122,11 @@ it changes.
   piece keeps the height the artist gave it, including the small amount the house
   foundation and the tree trunks are deliberately buried by. Keep it as a single
   `PLOT_Z` constant so a town that looks sunk or floating is one number to fix.
+
+  Confirmed in the browser: at `PLOT_Z = 0` the houses sit on the ground. The
+  reasoning above was sound, but it was reasoning — the diorama could have been
+  authored against a ground surface at any height, and `+0.52` is the top of a
+  mesh we throw away rather than a stated contract.
 - Reposition the two strays, in model units, before scaling:
   - `SnowMan` from `z = 19.8` to `z ≈ 11` — about 81 world units from the house, so it
     reads as standing in the front garden.
