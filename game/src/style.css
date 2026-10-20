@@ -1,6 +1,13 @@
 body {
   margin: 0;
   overflow: hidden;
+  /* The horizon colour from Sky.js, and it has to stay in step with it. The
+     renderer is created with `alpha: true`, so the page shows through until
+     the scene's background texture exists -- which on a night scene against
+     the browser default is a white flash on every load. This covers those few
+     frames. It is not a substitute for scene.background: the gradient is what
+     is actually seen once the first frame lands. */
+  background: #1d2b47;
 }
 
 .score {
@@ -27,7 +34,9 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.6);
+  /* 0.75, up from 0.6. The overlay has far less to darken now that the scene
+     is a night one, and at 0.6 the snowfield still read through the wording. */
+  background: rgba(0, 0, 0, 0.75);
   font-family: system-ui, sans-serif;
   color: #ffffff;
   text-align: center;
