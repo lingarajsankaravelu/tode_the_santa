@@ -122,20 +122,20 @@ const PROPS = [
   { name: 'Smoke', offset: { x: 0, z: 0 } },
 ];
 
-const HOUSE_COUNT = 5;
+export const HOUSE_COUNT = 5;
 // Distance from the origin to each house centre. The plot reaches about 125
 // units further, so the town's outer edge lands near 605 -- inside the
 // WORLD_RADIUS of 700 that Movement.js holds Tode inside, which it must be or
 // he is stopped by the invisible edge of the world before reaching the front
 // doors. It also puts the nearest wall 443 units from his start, far enough
 // that the town is somewhere he travels to rather than somewhere he begins.
-const TOWN_RADIUS = 480;
+export const TOWN_RADIUS = 480;
 // Angular width of the arc, centred on +X. 110 degrees across five houses is a
 // 27.5 degree step, which puts adjacent centres 228 units apart. Two houses
 // need at most about 137 between them (see the footprint note below), so the
 // geometry clears it comfortably and replaces the old rejection loop rather
 // than hiding it.
-const TOWN_SPREAD_DEGREES = 110;
+export const TOWN_SPREAD_DEGREES = 110;
 // Why +X: the river is on that side. riverX in
 // tools/generate_river_landscape.mjs puts the channel centre at model x 30.5,
 // which at Landscape.js's scale of 41 is 1251 world units, nearest water 1091.
@@ -146,7 +146,7 @@ const TOWN_SPREAD_DEGREES = 110;
 // break the flat-basin guarantee the landscape depends on, and raising the
 // bound would let Tode hop into the hills at z = 0 with the ground through his
 // waist. A town between the field and the river is the version that works.
-const TOWN_FACING = 0;
+export const TOWN_FACING = 0;
 // The house model faces -Y at a yaw of zero, not +Y like tode.glb and
 // enemy.glb, so every house needs half a turn on top of the facing worked out
 // below. Confirmed in the browser: at 0 the five fronts pointed out of the map
@@ -187,6 +187,21 @@ const WINDOW_MATERIAL = 'Glass';
 // brown.
 const WINDOW_COLOR = 0xffcc77;
 
+
+/**
+ * Where house `index` stands on the arc, in radians.
+ *
+ * Exported, and used below rather than duplicated, because visual/snow_roads
+ * lays a spur to each front door and the two have to agree exactly. Five
+ * numbers written out twice is five numbers that drift apart the first time
+ * the town is re-tuned -- which is the one failure the road spec singles out.
+ */
+export function houseAngle(index) {
+  const spread = THREE.MathUtils.degToRad(TOWN_SPREAD_DEGREES);
+
+  // Evenly across the arc, first and last house on its ends.
+  return TOWN_FACING - spread / 2 + (spread * index) / (HOUSE_COUNT - 1);
+}
 
 const loader = new GLTFLoader();
 
@@ -341,11 +356,8 @@ export function createHouses(map) {
   loader.load(MODEL_PATH, (gltf) => {
     lightTheWindows(gltf.scene);
 
-    const spread = THREE.MathUtils.degToRad(TOWN_SPREAD_DEGREES);
-
     for (let index = 0; index < HOUSE_COUNT; index += 1) {
-      // Evenly across the arc, first and last house on its ends.
-      const angle = TOWN_FACING - spread / 2 + (spread * index) / (HOUSE_COUNT - 1);
+      const angle = houseAngle(index);
 
       // Cloned per house. The model has no skins and no animations, which is
       // the case clone() handles cleanly -- the same reason small_house.glb
