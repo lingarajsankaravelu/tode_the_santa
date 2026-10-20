@@ -56,6 +56,29 @@ const WRAP_TOP = 0.88;
 const BULB_OUTSET = 1.5;
 const MIN_BULBS = 5;
 
+// The string along the front eaves, which is the decoration people actually
+// notice on a real house.
+//
+// An earlier note in visual/christmas_lights said this meant picking an edge
+// out of an 80,238-triangle mesh, and that was wrong. `Snow1` -- the roof
+// snow, already kept by House.js -- is one mesh of 5,866 vertices, and its
+// front edge is flat: the 45 vertices within a whisker of its maximum z all
+// sit level, spanning 100 world units at a height of 24. So the eave is a
+// single horizontal segment, and the string is a line.
+const EAVE_SPACING = 9;
+// How close to the front edge a vertex has to be to count as on it. The
+// measured edge vertices are within 0.59 world units of the maximum.
+const EAVE_EDGE_BAND = 0.6;
+// Mid-span droop. Without it this is a ruler-straight row of dots, which is
+// the single thing most likely to make it read as programmer art. A sine is
+// indistinguishable from a catenary over 100 units and needs nothing solved.
+const EAVE_SAG = 3;
+// Hangs the string below the eave rather than on it, so the bulbs are not
+// half-buried in roof snow.
+const EAVE_DROP = 2;
+// And forward of it, for the same reason BULB_OUTSET exists.
+const EAVE_OUT = 1.5;
+
 // World units, and this is the one constant here that does NOT ride the plot's
 // scale. gl_PointSize is computed from the material's size and the view
 // distance alone, so an object's scale does not reach it -- everything else in
@@ -258,7 +281,75 @@ function stringFor(tree, scale) {
   return bulbs;
 }
 
-function build(trees, scale) {
+/**
+ * Bulb positions along the front eave of the roof.
+ *
+ * Derived from the geometry rather than from the measured numbers above, the
+ * same choice the trees get: take the vertices within a band of the mesh's
+ * maximum z, and use their x range and mean height. If the asset changes, this
+ * follows it.
+ *
+ * Takes the roof in plot-local space, so `matrixWorld` is the plot-local
+ * transform -- House.js calls this while the plot's own matrix is still
+ * identity.
+ *
+ * The named node is a wrapper, not the mesh. Almost every named thing in this
+ * diorama is: `Snow1` holds one child that carries the geometry, the way each
+ * of the smoke's `pCube` nodes does. So the mesh is searched for rather than
+ * assumed, which costs nothing and is the difference between this working and
+ * reading `geometry` off an Object3D.
+ */
+function eaveString(roof, scale) {
+  let mesh = null;
+
+  roof.traverse((child) => {
+    if (!mesh && child.isMesh) mesh = child;
+  });
+
+  if (!mesh) return [];
+
+  const attribute = mesh.geometry.attributes.position;
+  const box = new THREE.Box3().setFromObject(mesh);
+  const band = EAVE_EDGE_BAND / scale;
+  const vertex = new THREE.Vector3();
+  let lowestX = Infinity;
+  let highestX = -Infinity;
+  let heightSum = 0;
+  let found = 0;
+
+  for (let index = 0; index < attribute.count; index += 1) {
+    vertex.fromBufferAttribute(attribute, index).applyMatrix4(mesh.matrixWorld);
+
+    if (vertex.z < box.max.z - band) continue;
+
+    lowestX = Math.min(lowestX, vertex.x);
+    highestX = Math.max(highestX, vertex.x);
+    heightSum += vertex.y;
+    found += 1;
+  }
+
+  if (found === 0) return [];
+
+  const height = heightSum / found;
+  const span = highestX - lowestX;
+  const count = Math.max(2, Math.round((span * scale) / EAVE_SPACING) + 1);
+  const sag = EAVE_SAG / scale;
+  const bulbs = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const u = index / (count - 1);
+
+    bulbs.push(new THREE.Vector3(
+      lowestX + span * u,
+      height - EAVE_DROP / scale - sag * Math.sin(Math.PI * u),
+      box.max.z + EAVE_OUT / scale,
+    ));
+  }
+
+  return bulbs;
+}
+
+function build({ trees, roof }, scale) {
   const found = findTrees(trees, scale);
   // Tallest first, so that lighting only the nearest few per plot stays a
   // one-line experiment if 22 decorated trees turns out to read as a
@@ -267,7 +358,13 @@ function build(trees, scale) {
 
   found.sort((a, b) => b.canopy.getSize(size).y - a.canopy.getSize(size).y);
 
-  const bulbs = found.flatMap((tree) => stringFor(tree, scale));
+  // One wire: the tree strings first, then the eave, so the four-colour cycle
+  // carries across from the last tree to the roof the way it carries from one
+  // tree to the next.
+  const bulbs = [
+    ...found.flatMap((tree) => stringFor(tree, scale)),
+    ...(roof ? eaveString(roof, scale) : []),
+  ];
   const positions = new Float32Array(bulbs.length * 3);
   // The base colours are kept so the twinkle can scale them each frame
   // without the rounding drift that repeatedly scaling the live buffer would
@@ -329,8 +426,8 @@ function build(trees, scale) {
  * the group sits at the top of the loaded hierarchy, and re-parenting in
  * three.js does not preserve a world transform.
  */
-export function createChristmasLights(trees, scale) {
-  if (!shared) shared = build(trees, scale);
+export function createChristmasLights(pieces, scale) {
+  if (!shared) shared = build(pieces, scale);
 
   const lights = new THREE.Points(shared.geometry, shared.material);
 

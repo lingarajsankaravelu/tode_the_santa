@@ -75,6 +75,11 @@ const TREES_NAME = 'Trees1';
 // The chimney smoke, named for the same reason: Smoke.js animates the group's
 // 19 puffs and needs the group, not its contents.
 const SMOKE_NAME = 'Smoke';
+// The lying-snow group, and the mesh inside it that is the roof. The eave
+// lights are measured off `Snow1` rather than off the house, which is 80,238
+// triangles -- the roof snow is one 5,866-vertex mesh with a flat front edge.
+const SNOW_NAME = 'Snow';
+const ROOF_NAME = 'Snow1';
 
 const PROPS = [
   // Twenty-odd conifers clustered off the house's corner. Deliberately NOT
@@ -234,6 +239,7 @@ function createHouse(source, angle) {
   const building = takePiece(source, plot, BUILDING_NAME);
   let trees = null;
   let smoke = null;
+  let snow = null;
 
   PROPS.forEach(({ name, offset, exclude }) => {
     const prop = takePiece(source, plot, name, exclude);
@@ -245,6 +251,7 @@ function createHouse(source, angle) {
 
     if (name === TREES_NAME) trees = prop;
     if (name === SMOKE_NAME) smoke = prop;
+    if (name === SNOW_NAME) snow = prop;
   });
 
   if (trees) {
@@ -259,7 +266,10 @@ function createHouse(source, angle) {
     // Not an obstacle, and nothing to add to the `houses` array: this is a
     // child of the plot, so it travels with the yard and Collision.js never
     // hears about it.
-    plot.add(createChristmasLights(trees, MODEL_SCALE));
+    plot.add(createChristmasLights(
+      { trees, roof: snow?.getObjectByName(ROOF_NAME) },
+      MODEL_SCALE,
+    ));
   }
 
   // Registers this chimney with Smoke.js, which animates all five from one
