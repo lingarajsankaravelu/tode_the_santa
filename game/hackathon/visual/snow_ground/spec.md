@@ -120,18 +120,16 @@ frozen river is a different and larger idea — it would want ice geometry, not 
 palette change — and `visual/river_landscape` keeps the water as scenery that
 Tode cannot reach anyway.
 
-#### This collides with `visual/snow_roads`
+#### This collided with `visual/snow_roads` — settled
 
-Worth settling before both are built. `visual/snow_roads` specifies a road in
-`ROAD_COLOR = 0xe8eef2`, chosen to separate from a **green** field. On
-`GROUND_SNOW = 0xe9eef5` it is invisible — the two differ by one or two values
-per channel.
+`visual/snow_roads` specified a road in `ROAD_COLOR = 0xe8eef2`, chosen to
+separate from a **green** field. On `GROUND_SNOW = 0xe9eef5` it is invisible —
+the two differ by one or two values per channel.
 
-Whichever of the two tasks lands second has to resolve it. The road is the thing
-that should change, not the ground: a road through snow is *compacted* snow, so
-it should read a shade darker and greyer than the fields around it, somewhere
-near `0xd2dae3`, with the verges left bright. Amend `ROAD_COLOR` in that spec
-rather than lightening the ground to suit it.
+Settled when this task was implemented, and in the direction this section
+called for: the road changed, not the ground. `ROAD_COLOR` in that spec is now
+`0xd2dae3` — compacted snow, a shade darker and greyer than the fields, with
+the verges left bright.
 
 #### Verification
 

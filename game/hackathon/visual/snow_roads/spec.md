@@ -30,7 +30,7 @@ In the `components` directory, add a `SnowRoads.js` file exporting
 | `ROAD_WIDTH` | `50` | Spans 365 to 415, leaving a **27.6**-unit verge between the road edge and the front walls. About 11 ft wide at this project's scale — a lane, not a motorway. |
 | `ROAD_SPREAD` | `130` degrees | The town spans 110°. Ten degrees past each end house stops the road from ending dead at the last doorstep. 885 units of road at this radius. |
 | `ROAD_SEGMENTS` | `64` | `thetaSegments`. Over 130° that is one segment per 2°, which holds a smooth edge at the camera's distance. |
-| `ROAD_COLOR` | `0xe8eef2` | Packed snow: near-white with a cold cast, so it separates from the terrain without glaring. |
+| `ROAD_COLOR` | `0xd2dae3` | Compacted snow: a shade darker and greyer than the fields, with the verges left bright. **Amended.** The original `0xe8eef2` was chosen to separate from a green field; `visual/snow_ground` has since landed and the ground is now `0xe9eef5`, which that value is invisible against — the two differ by one or two values per channel. |
 
 `thetaStart` is `-ROAD_SPREAD / 2` in radians and `thetaLength` is the full
 spread, measured from +X — which is the axis `visual/winter_town` centres the
@@ -40,6 +40,9 @@ Use `MeshBasicMaterial`, not `MeshStandardMaterial`. The scene's ambient and
 directional lights are both at intensity 1.5, which together push a lit white
 material past white and flatten the road into a glare. This is the same
 reasoning the old `Map.js` floor used for the same reason.
+
+`visual/snow_ground` is now implemented, so the collision it flagged is
+resolved above and needs no further decision here.
 
 #### The depth buffer is the real problem here
 

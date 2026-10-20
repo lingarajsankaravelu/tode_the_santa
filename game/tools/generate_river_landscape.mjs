@@ -26,18 +26,20 @@ const hex = (h, jitter = 0) => {
   return [16, 8, 0].map((s) => srgbToLinear(Math.min(1, (((h >> s) & 255) / 255) * k)))
 }
 
-const GRASS = 0x6ead4a
-const GRASS_DARK = 0x4e8c3a
 const SAND = 0xc2b280
 const ROCK = 0x8a8577
 const BARK = 0x6b4a2f
 const PINE = 0x2f6b3f
 const PINE_LIGHT = 0x3d8a4d
 const WATER = 0x3f8fd4
+// SNOW and SNOW_SHADE are the mountain caps, and the ground deliberately does
+// not reuse them: fields the same white as the peaks dissolve the horizon, and
+// the mountains stop reading as distance. The ground pair is a little cooler
+// and darker so the caps still separate from the snowfield they stand in.
 const SNOW = 0xf2f4f7
 const SNOW_SHADE = 0xd4e0ec
-const PETAL_P = 0x9b5fc0
-const PETAL_Y = 0xe8c54a
+const GROUND_SNOW = 0xe9eef5
+const GROUND_SNOW_SHADE = 0xcfdceb
 
 // --------------------------------------------------------------- mesh buffer
 const mesh = () => ({ pos: [], nrm: [], col: [] })
@@ -121,11 +123,20 @@ for (let i = 0; i < GRID; i++) {
       const mx = (f[0][0] + f[1][0] + f[2][0]) / 3
       const mz = (f[0][2] + f[1][2] + f[2][2]) / 3
       const dist = Math.abs(mx - riverX(mz))
-      let base = GRASS
-      if (my < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND            // riverbed
-      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : GRASS_DARK   // banks
-      else if (my > 2.2) base = rnd() < 0.5 ? ROCK : GRASS_DARK            // high ground
-      else if (rnd() < 0.3) base = GRASS_DARK
+      // Winter, but not uniformly: each branch is a different piece of ground
+      // and they must not all come back the same white. The riverbed stays
+      // sand because it is under the water and a sandy bed seen through the
+      // surface is right in any season -- white there would read as ice, and
+      // the river is not frozen. Rock keeps its half of the high ground, since
+      // faces too steep to hold snow are what give the hills their shape.
+      let base = GROUND_SNOW
+      if (my < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND                  // riverbed
+      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : GROUND_SNOW_SHADE  // banks
+      else if (my > 2.2) base = rnd() < 0.5 ? ROCK : GROUND_SNOW_SHADE           // high ground
+      else if (rnd() < 0.3) base = GROUND_SNOW_SHADE
+      // The jitter is doing more work on white than it was on green: snow
+      // with no per-face variation reads as a void, and this is the only thing
+      // giving the fields any texture at all.
       tri(land, f[0], f[1], f[2], hex(base, 0.09))
     }
   }
@@ -271,22 +282,6 @@ function pine (m, x, z) {
   }
 }
 
-function flower (m, x, z) {
-  const y = height(x, z)
-  const h = rng(0.22, 0.38)
-  const color = rnd() < 0.5 ? PETAL_P : PETAL_Y
-  prism(m, x, z, y, 0.025, h, 3, PINE)
-  const head = y + h
-  const r = rng(0.1, 0.16)
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2
-    const b = ((i + 1) / 4) * Math.PI * 2
-    tri(m, [x, head + 0.07, z],
-           [x + Math.cos(a) * r, head, z + Math.sin(a) * r],
-           [x + Math.cos(b) * r, head, z + Math.sin(b) * r], hex(color, 0.1))
-  }
-}
-
 // ------------------------------------------------------------------ scatters
 const nearRiver = (x, z) => Math.abs(x - riverX(z)) < BANK * 2.9
 const inBounds = (x, z) => Math.abs(x) < SIZE - 1 && Math.abs(z) < SIZE - 1
@@ -317,12 +312,9 @@ for (let n = 0, guard = 0; n < 7 && guard < 500; guard++) {
   rock(land, x, WATER_Y + rng(-0.05, 0.2), z, rng(0.2, 0.38), ROCK); n++
 }
 
-// Wildflowers.
-for (let n = 0, guard = 0; n < 170 && guard < 16000; guard++) {
-  const x = rng(-SIZE + 2, SIZE - 2), z = rng(-SIZE + 2, SIZE - 6)
-  if (inBasin(x, z) || nearRiver(x, z) || height(x, z) < WATER_Y + 0.7) continue
-  flower(land, x, z); n++
-}
+// No wildflowers. There were 170 of them in purple and yellow, which is the
+// single most obviously wrong thing in a snowfield, and the flower() builder
+// went with them rather than being left behind unused.
 
 // Angular snow-capped mountains along the far edge.
 for (let i = 0; i < 14; i++) {
