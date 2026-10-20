@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createChristmasLights } from './ChristmasLights.js';
 import { createSmokePlume } from './Smoke.js';
+import { createWreath } from './Wreath.js';
 
 const MODEL_PATH = '/models/winter_country_house.glb';
 // The House group inside the model is 10.85 units tall, so this puts it at
@@ -278,6 +279,10 @@ function createHouse(source, angle) {
       MODEL_SCALE,
     ));
   }
+
+  const door = building?.getObjectByName(DOOR_NAME);
+
+  if (door) plot.add(createWreath(door, MODEL_SCALE));
 
   // Registers this chimney with Smoke.js, which animates all five from one
   // timer. Nothing is added to the plot -- the puff is already in it -- so
