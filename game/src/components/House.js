@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createChristmasLights } from './ChristmasLights.js';
+import { createSmokePlume } from './Smoke.js';
 
 const MODEL_PATH = '/models/winter_country_house.glb';
 // The House group inside the model is 10.85 units tall, so this puts it at
@@ -14,7 +16,7 @@ const MODEL_SCALE = 7.4;
 // meshes and 124,005 triangles: a house, a well, trees, a snowman, lying snow,
 // a bridge, sledges, shovels, fishes, a smoke puff and a ground patch, spread
 // across a scene 159 units long. Only the named pieces below are kept, which
-// brings a house to 80,238 triangles.
+// brings a house to 83,440 triangles.
 //
 // The discard that matters is `Ground`, 27,595 triangles of ground patch. The
 // landscape already is the ground, and two ground surfaces at one height is
@@ -29,31 +31,86 @@ const MODEL_SCALE = 7.4;
 // with no snow on it.
 const BUILDING_NAME = 'House';
 
-// Each kept prop, with the nudge that brings it into its own house's yard.
+// Each kept prop. Every one of them is now left exactly where the artist put
+// it, and the offsets are kept at zero rather than removed because getting one
+// of them wrong is a specific, easy mistake -- see the sign note below.
+//
 // Offsets are in model units and are applied before the scale, so they read at
-// the same size as the measurements above.
+// the same size as the measurements above. **The front of the house is model
+// +Z.** The model faces -Y in game space at a yaw of zero, which is why
+// MODEL_BASE_ROTATION exists, and after the Z-up quarter turn model +Z is the
+// direction that ends up pointing at the origin -- so a POSITIVE z offset
+// moves a prop out towards the field and a negative one pushes it round the
+// back. Confirmed by transforming the basis vectors rather than reasoned
+// about: model +Z comes out as world (-1, 0, 0) for the house at angle 0,
+// which sits at world (480, 0), so +Z is towards the middle of the map.
 //
 // Two of these are not whole groups, and that is deliberate -- measuring the
 // groups alone is misleading:
-//  - The snowman is `polySurface538` specifically. Its parent `SnowMan` group
-//    also holds a bucket and some odds and ends scattered near the diorama's
-//    origin, and the snowman itself stands 39.9 units away from the house.
+//  - The snowman is `polySurface538`, which is the body ALONE, and that is
+//    worth revisiting rather than defending. Measured through the loaded
+//    scene, its parent `SnowMan` group is 11 x 21 x 11 world units of
+//    snowman: the body, a carrot nose (`pCone1`, on a `Carrot` material), a
+//    wooden bucket hat (`bucket2`, 1056 triangles of slats and metal bands)
+//    and two `Rock1` coal buttons, every piece within 0.1 model units of the
+//    body's own centre. 5,182 triangles against the body's 3,956.
+//
+//    So the group is not scattered and nothing needs excluding -- the earlier
+//    note here, that it "holds a bucket and some odds and ends scattered near
+//    the diorama's origin" and that the snowman "stands 39.9 units away from
+//    the house", described neither. Both came from reading accessor bounds
+//    without walking the node transforms, the same mistake that once measured
+//    this model's windows as a 7.4-unit cube. The cost of believing it is that
+//    all five snowmen are bare white blobs with no face, and that this entry
+//    carried an offset of `{ x: -1, z: -30 }` for a while -- a pull of 30
+//    towards a house only 4 model units away, in the direction that goes
+//    through it, which put a snowman 196 units behind all five houses.
 //  - `Kolodec` is the well, but 118.6 of its 119-unit span is one child,
 //    `pCylinder14` -- a pond or path lying 58 units off. Dragging that into
 //    every plot would put a 878-unit slab through the town, so it is excluded
 //    by name and the rest of the group, a tidy well cluster, is kept.
+// The conifers, named because visual/christmas_lights needs the group itself
+// and not just its contents -- the light strings are measured off it.
+const TREES_NAME = 'Trees1';
+// The chimney smoke, named for the same reason: Smoke.js animates the group's
+// 19 puffs and needs the group, not its contents.
+const SMOKE_NAME = 'Smoke';
+
 const PROPS = [
   // Twenty-odd conifers clustered off the house's corner. Deliberately NOT
   // nudged: the snow sitting on these trees lives in the `Snow` group below,
   // not inside `Trees1`, so moving the trees would walk them out from under
   // their own snow caps and leave six white blobs floating where they used to
   // be. At (66, 72) world units from the house they already read as beside it.
-  { name: 'Trees1', offset: { x: 0, z: 0 } },
+  { name: TREES_NAME, offset: { x: 0, z: 0 } },
   { name: 'Kolodec', offset: { x: 0, z: 0 }, exclude: ['pCylinder14'] },
-  { name: 'polySurface538', offset: { x: -1, z: -30 } },
+  // The snowman, whole: body, carrot nose, bucket hat and two coal buttons.
+  // Taking the group rather than the `polySurface538` body alone costs 1,226
+  // triangles and changes the footprint by nothing at all -- same x and z to
+  // three decimal places, same base height, 3 world units taller for the hat.
+  //
+  // In the front yard where it was modelled: 26 world units off the front
+  // wall, 12 clear of the nearest conifer and 72 clear of the well. It stands
+  // 28 units to one side of the plot's own radius, which is where
+  // visual/snow_roads will run a 36-wide spur to the door -- so it clears that
+  // path by 10 units, and if SPUR_WIDTH grows, this is the prop it hits first.
+  { name: 'SnowMan', offset: { x: 0, z: 0 } },
   // Lying snow: the roof, and caps on the trees and posts. Left unmoved for
   // the same reason the trees are.
   { name: 'Snow', offset: { x: 0, z: 0 } },
+  // Smoke from the chimney, which is the cheapest thing in this file that says
+  // somebody is home on Christmas Eve. 1,976 triangles across 19 meshes.
+  //
+  // It needs no placing: the artist left it sitting on the roofline, spanning
+  // 55 to 76 world units above the plot against a house that is 55 tall, with
+  // its footprint entirely within the roof. Measured rather than assumed,
+  // because a smoke puff hanging beside a chimney is the sort of thing that
+  // only shows up from one camera angle.
+  //
+  // Static. It does not rise or drift, and animating it is a separate job --
+  // the puff is 19 separate meshes, so it would want a per-mesh drift rather
+  // than one translation, or it will read as a solid object sliding upwards.
+  { name: 'Smoke', offset: { x: 0, z: 0 } },
 ];
 
 const HOUSE_COUNT = 5;
@@ -121,6 +178,7 @@ const WINDOW_MATERIAL = 'Glass';
 // brown.
 const WINDOW_COLOR = 0xffcc77;
 
+
 const loader = new GLTFLoader();
 
 // The placed houses, in the order the arc was walked -- west to east. Exported
@@ -174,6 +232,8 @@ function createHouse(source, angle) {
   const plot = new THREE.Group();
 
   const building = takePiece(source, plot, BUILDING_NAME);
+  let trees = null;
+  let smoke = null;
 
   PROPS.forEach(({ name, offset, exclude }) => {
     const prop = takePiece(source, plot, name, exclude);
@@ -182,7 +242,31 @@ function createHouse(source, angle) {
 
     prop.position.x += offset.x;
     prop.position.z += offset.z;
+
+    if (name === TREES_NAME) trees = prop;
+    if (name === SMOKE_NAME) smoke = prop;
   });
+
+  if (trees) {
+    // Here, and not a line later, which is the whole of the placement
+    // problem. The string is measured off the trees' own boxes, and it has to
+    // come out in the plot's coordinates -- so the plot's matrix has to still
+    // be identity when the boxes are read, which it is only until
+    // plot.scale/rotation are set below. Measuring the source scene instead
+    // would assume Trees1 sits at the top of the loaded hierarchy, and
+    // re-parenting in three.js does not preserve a world transform.
+    plot.updateMatrixWorld(true);
+    // Not an obstacle, and nothing to add to the `houses` array: this is a
+    // child of the plot, so it travels with the yard and Collision.js never
+    // hears about it.
+    plot.add(createChristmasLights(trees, MODEL_SCALE));
+  }
+
+  // Registers this chimney with Smoke.js, which animates all five from one
+  // timer. Nothing is added to the plot -- the puff is already in it -- so
+  // unlike the lights above this does not care when it is called, only that
+  // the smoke has been re-homed.
+  if (smoke) createSmokePlume(smoke, MODEL_SCALE);
 
   plot.scale.setScalar(MODEL_SCALE);
   // Z is up in this game and the .glb is Y-up, the same quarter turn every
