@@ -46,15 +46,24 @@ const BUILDING_NAME = 'House';
 //
 // Two of these are not whole groups, and that is deliberate -- measuring the
 // groups alone is misleading:
-//  - The snowman is `polySurface538` specifically. Its parent `SnowMan` group
-//    also holds a bucket and some odds and ends scattered near the diorama's
-//    origin. That group's spread is where the "39.9 units from the house"
-//    figure came from, and it is the wrong measurement: the snowman mesh on
-//    its own already stands 26 world units off the front wall, which is the
-//    front yard. It is the reason this entry carried an offset of
-//    `{ x: -1, z: -30 }` for a while -- a pull of 30 towards a house that was
-//    only 4 model units away, in the direction that goes through it, which put
-//    a snowman 196 units behind all five houses.
+//  - The snowman is `polySurface538`, which is the body ALONE, and that is
+//    worth revisiting rather than defending. Measured through the loaded
+//    scene, its parent `SnowMan` group is 11 x 21 x 11 world units of
+//    snowman: the body, a carrot nose (`pCone1`, on a `Carrot` material), a
+//    wooden bucket hat (`bucket2`, 1056 triangles of slats and metal bands)
+//    and two `Rock1` coal buttons, every piece within 0.1 model units of the
+//    body's own centre. 5,182 triangles against the body's 3,956.
+//
+//    So the group is not scattered and nothing needs excluding -- the earlier
+//    note here, that it "holds a bucket and some odds and ends scattered near
+//    the diorama's origin" and that the snowman "stands 39.9 units away from
+//    the house", described neither. Both came from reading accessor bounds
+//    without walking the node transforms, the same mistake that once measured
+//    this model's windows as a 7.4-unit cube. The cost of believing it is that
+//    all five snowmen are bare white blobs with no face, and that this entry
+//    carried an offset of `{ x: -1, z: -30 }` for a while -- a pull of 30
+//    towards a house only 4 model units away, in the direction that goes
+//    through it, which put a snowman 196 units behind all five houses.
 //  - `Kolodec` is the well, but 118.6 of its 119-unit span is one child,
 //    `pCylinder14` -- a pond or path lying 58 units off. Dragging that into
 //    every plot would put a 878-unit slab through the town, so it is excluded
