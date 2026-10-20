@@ -4,6 +4,13 @@ import { isPositionFree, wouldCollide } from './Collision.js';
 import { triggerGameOver } from './GameState.js';
 import { getDifficulty } from './Difficulty.js';
 
+// Off while the winter scenery is being built: you cannot stand still long
+// enough to look at the ground with monsters arriving every few seconds. Set
+// back to true to restore the chase -- nothing else here changes, and an empty
+// enemies array is a state every other system already handles, since that is
+// what the first few seconds of a run look like anyway.
+const SPAWN_ENABLED = false;
+
 // Half-width of the map: how far the corner spawn points sit from the origin.
 const SPAWN_DISTANCE = 220;
 // Extra turn applied to the model if enemy.glb does not face +Y by default.
@@ -70,7 +77,7 @@ export function updateEnemies(scene, player, obstacles = []) {
 
   timeSinceLastSpawn += clock.getDelta();
 
-  if (timeSinceLastSpawn >= spawnDelay) {
+  if (SPAWN_ENABLED && timeSinceLastSpawn >= spawnDelay) {
     timeSinceLastSpawn = 0;
     spawnEnemy(scene);
   }

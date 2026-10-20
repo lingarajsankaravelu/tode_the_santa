@@ -10,7 +10,46 @@ wildflowers in it. This task fixes the ground under all of that.
 The trees stay as they are. Snow-dusted pines would be an improvement and are
 explicitly **not** part of this task.
 
-#### This is a tools change, not a code change
+#### Two settings outside the generator
+
+The task is otherwise confined to the generator, but the snow bed cannot be
+made to render correctly without one change in `game/src/`, and it is the more
+important of the two fixes here.
+
+**`Camera.js`: `NEAR_PLANE` goes from `0.1` to `10`.** A 24-bit depth buffer
+resolves roughly `z² / (near × 2²⁴)` at distance `z`, so at 0.1 this scene was
+working with:
+
+| Distance | Resolution at `near = 0.1` | at `near = 10` |
+|---|---|---|
+| 1000 units | 0.60 | 0.0060 |
+| 2000 units | 2.38 | 0.0238 |
+| 2600 units (the mountains) | **4.03** | 0.0403 |
+
+Four world units of uncertainty is coarser than the gaps between surfaces that
+are meant to be in front of each other. Two things were visibly failing: the
+mountains overlap each other out at the far edge, and the snow bed lies a few
+units above the ground it covers. Both lost the depth test in patches, and the
+patches flipped as the camera moved — so the whole scene flickered whenever Tode
+jumped.
+
+Nothing is clipped by the new plane. The camera sits about 368 units from Tode,
+and the nearest thing to the lens is the snowfall, whose band geometry in
+`Snow.js` puts its closest flake roughly 53 units out — five times the new
+plane. Nothing in this game is ever drawn close to the lens.
+
+This is the one-line change `visual/snow_roads` identified in its own Research
+section and deferred as "the real fix" for coplanar scenery. It is no longer
+deferred, which also means that spec's `polygonOffset` workaround is now
+belt-and-braces rather than load-bearing.
+
+**`Enemies.js`: `SPAWN_ENABLED = false`.** Not part of this task's intent, but
+recorded because it is in the same commit: you cannot stand still long enough to
+judge the ground with monsters arriving every few seconds. Set it back to `true`
+to restore the chase. An empty `enemies` array is a state every other system
+already handles, since it is what the first seconds of a run look like anyway.
+
+#### This is otherwise a tools change, not a code change
 
 The ground is `/models/river_landscape.glb`, and it has no textures: every
 colour is baked into vertex data by `game/tools/generate_river_landscape.mjs`.
@@ -223,6 +262,24 @@ hill under snow. Where cover reaches zero the surface tapers to meet the land
 and **no face is emitted at all** — a degenerate face lying in the ground would
 simply z-fight it.
 
+**No snow thinner than the depth buffer can resolve.** `COVER_MIN = 0.12` —
+below that much cover the snow is not drawn at all, rather than drawn as a film
+too thin to win a depth test. At `SNOW_DEPTH` that floor is 1.5 world units,
+and the thickness is also clamped up to it inside the snow region so a boundary
+vertex cannot thin out below it. Measured before this went in: **231** snow
+faces were thinner than the resolution where they sat, which is what put
+earth-coloured polygons in the middle of the snowfield. Now zero, with a 45×
+worst-case margin. The `Camera.js` fix alone is enough to hide this, but a
+surface this large should not depend on a single setting elsewhere to stay
+visible.
+
+**Fill single-cell holes.** A lone bare cell surrounded by snow is not rock
+showing through, it is a stray earth triangle in a white field. `snowHere()`
+keeps a cell if three or more of its four neighbours have snow. Two such holes
+appeared at `COVER_MIN` before this went in; the measured count must be **zero**.
+The larger bare region along the channel is coherent and wants no filling —
+1,195 bare cells, none of them isolated.
+
 **`crunch` must be a function of position, not of grid index.** Adjacent cells
 share vertices, and a per-vertex value that disagreed between them would open
 cracks straight through the surface. `0.5 + 0.5 * Math.sin(x * 12.9898 + z * 78.233)`
@@ -313,8 +370,8 @@ the verges left bright.
    generator is being re-run and that is the moment to confirm the shape did not
    drift. Note that the generator does **not** print these; it prints only
    triangles and bytes. They have to be read back out of the `.glb`.
-2. The `.glb` should come back at roughly 3.9 MB and **36,386** triangles, of
-   which **13,226** are the snow layer. That is up from 24,982, and the snow bed
+2. The `.glb` should come back at roughly 3.9 MB and **36,197** triangles, of
+   which **13,097** are the snow layer. That is up from 24,982, and the snow bed
    is what paid for it: against the winter town's 401,190 triangles it is not
    worth optimising, but the file is 1.4 MB larger to load and that is the real
    cost of this task.
@@ -331,6 +388,9 @@ the verges left bright.
    `-0.0830`, so he hovers at most 3.4 world units — against his own height of
    102, which is nothing. Also confirm **zero** snow faces over the channel and
    **zero** snow normals pointing down.
+   Then check the two artifact counts that cost a browser round trip to find:
+   **zero** snow faces thinner than the depth resolution where they sit, and
+   **zero** isolated single-cell holes.
 5. Check the horizon specifically. This is the thing most likely to go wrong, and
    the reason for the two new constants.
 

@@ -197,17 +197,48 @@ function snowCover (x, z) {
   return Math.max(0, edge * (1 - Math.min(1, slope / 1.1)))
 }
 
+// Below this much cover the snow is not drawn at all, rather than drawn as a
+// film too thin to win a depth test. 0.12 of SNOW_DEPTH is 1.5 world units of
+// snow, which is the thinnest edge worth keeping: measured against the depth
+// buffer it is 37 times the resolution at the far edge of the map, where the
+// faces that were failing had thinned to under one unit. Belt and braces with
+// Camera.js's near plane -- that fix alone is enough, but a surface this large
+// should not be relying on a single setting elsewhere to stay visible.
+const COVER_MIN = 0.12
+
 // Pseudo-random per vertex, but a function of position rather than of the grid
 // index, because adjacent cells share vertices and anything that disagreed
 // between them would open cracks straight through the surface. Gives the snow
 // its faceted crunch instead of a smooth skin.
 const crunch = (x, z) => 0.5 + 0.5 * Math.sin(x * 12.9898 + z * 78.233)
 
+// Where the snow is drawn, with single-cell holes filled in. A lone bare cell
+// in the middle of a snowfield is not rock showing through, it is a stray
+// earth-coloured triangle in a white field -- which is the exact artifact this
+// pass exists to remove, so it is not left to chance. Two of them appeared at
+// COVER_MIN before this went in.
+const GRID_STEP = (SIZE * 2) / GRID
+function snowHere (x, z) {
+  if (snowCover(x, z) >= COVER_MIN) return true
+
+  let neighbours = 0
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (snowCover(x + dx * GRID_STEP, z + dz * GRID_STEP) >= COVER_MIN) neighbours += 1
+  }
+
+  return neighbours >= 3
+}
+
 // The terrain, dropped by the depth of the snow now sitting on it.
 const landY = (x, z) => height(x, z) - SNOW_DEPTH
 
 function snowY (x, z) {
-  const cover = snowCover(x, z)
+  // Inside the snow region the thickness has a floor, so a filled hole or a
+  // boundary vertex cannot end up as a film too thin to win a depth test.
+  // Outside it the raw value stands, so the surface still tapers into the land
+  // rather than ending on a step.
+  const raw = snowCover(x, z)
+  const cover = snowHere(x, z) ? Math.max(COVER_MIN, raw) : raw
   const amp = SNOW_RELIEF_BASIN +
     (SNOW_RELIEF_HILLS - SNOW_RELIEF_BASIN) * basinWeight(x, z)
   // Both terms are subtracted, so the surface can never rise above the old
@@ -263,7 +294,7 @@ for (let i = 0; i < GRID; i++) {
       const mz = (f[0][2] + f[1][2] + f[2][2]) / 3
       // No face at all where the snow has tapered away, rather than a
       // degenerate one lying in the ground z-fighting it.
-      if (snowCover(mx, mz) < 0.03) continue
+      if (!snowHere(mx, mz)) continue
       // Gentler jitter than the land gets: the relief is supplying the
       // variation now, and heavy colour noise on top of it only reads as dirt.
       tri(snow, f[0], f[1], f[2], hex(snowAt(mx, mz), 0.04))
