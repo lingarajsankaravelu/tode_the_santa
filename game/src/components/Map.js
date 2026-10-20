@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createLandscape } from './Landscape.js';
+import { createSnowRoads } from './SnowRoads.js';
 
 /**
  * Builds the ground. Returns a Group rather than the landscape itself,
@@ -16,6 +17,11 @@ export function createMap() {
   const map = new THREE.Group();
 
   map.add(createLandscape());
+  // After the landscape, which is the order the two want to be drawn in -- but
+  // only as a statement of intent. three.js sorts opaque meshes front to back
+  // rather than by insertion, so what actually keeps the road on top of the
+  // ground is the polygonOffset and the 0.04 lift in SnowRoads.js.
+  map.add(createSnowRoads());
 
   return map;
 }
