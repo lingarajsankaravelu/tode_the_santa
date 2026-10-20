@@ -1,5 +1,56 @@
 ### Specification for AI agent: Snow roads
 
+> **Implemented** in `game/src/components/SnowRoads.js`, with five corrections
+> found by measuring the placed town rather than reading its bounding boxes.
+> The spec below is left as it was written; these override it.
+>
+> 1. **`ROAD_RADIUS` is 300, not 390, and the road runs outside the yards
+>    rather than in front of the doors.** This spec measured the *house* and
+>    not the *garden*. Walking every vertex of a placed plot through its
+>    transforms gives, along the plot's own radius: front door 453.7, porch
+>    column 437.5, path lanterns 433.7 and 407.7, snowman 394.1–405.1, conifers
+>    333.2–455.7. A 50-wide road centred at 390 spans 365–415, which puts the
+>    street through all five snowmen, through the conifer clusters and over the
+>    outer lanterns. The arc crosses every plot at the same radius, so inside
+>    the tree line is the only band in the town that is clear of props, and the
+>    road is derived as `TOWN_RADIUS − 146.8 − 8 − ROAD_WIDTH/2 = 300.2`.
+> 2. **The front wall is not at 442.6.** The footprint is 80.8 deep, not 74.7,
+>    so the bounding box reaches 430.8 — but that is buried foundation. Above
+>    ground the house starts at 436.2, and in the path's own corridor
+>    (|lateral| < 18) the first thing it meets is a porch column at 437.5 with
+>    the door 16 units behind it. The spur therefore ends at **440.5**, tucked
+>    3 units under the porch, and `SPUR_LENGTH` is **118.3**, not 34.
+> 3. **`MeshStandardMaterial`, not `MeshBasicMaterial`.** The reasoning for
+>    basic — "the scene's ambient and directional lights are both at intensity
+>    1.5" — has not been true since `visual/night`. Unlit, the road would write
+>    `ROAD_COLOR` straight to the screen at rgb(210, 218, 227) against a
+>    snowfield rendering rgb(117, 125, 142): a strip of daylight across the
+>    town at night. Lit, the same albedo renders rgb(95, 106, 125), it tracks
+>    the fields through any future retune of the rig, and it can take a shadow
+>    — which matters, because `skeleton/atmosphere` is next and an unlit road
+>    would be a shadowless hole in the one part of the map that has shadows.
+> 4. **`ROAD_COLOR` survives at `0xd2dae3`, and the ground is `0xffffff`.**
+>    This spec's amendment note says `visual/snow_ground` landed on `0xe9eef5`;
+>    it did not — `GROUND_SNOW` is flat white, deliberately matching the
+>    house's own roof snow. The road still reads against it, as the rendered
+>    pair above shows.
+> 5. **The depth-precision table is stale, and `polygonOffset` is now belt and
+>    braces.** `NEAR_PLANE` is 10, not 0.1 — the Research section's own
+>    recommendation, delivered by `visual/night` — so the buffer resolves about
+>    0.001 units at town distance. And the gap is larger than this spec
+>    assumed: the snow bed's generator subtracts both of its relief terms, so
+>    the basin surface can only dip *below* the walk plane, lying between −2.95
+>    and −0.05. `ROAD_Z = 0.04` therefore clears it by at least 0.09 and by up
+>    to 3 units in the hollows, and nothing can poke through from below. Both
+>    measures are kept anyway: 681 units of coplanar surface should not depend
+>    on one setting in another file staying put.
+>
+> Also delivered: `House.js` now exports `houseAngle(index)`, `HOUSE_COUNT`,
+> `TOWN_RADIUS`, `TOWN_SPREAD_DEGREES` and `TOWN_FACING`, and uses
+> `houseAngle` itself — which is this spec's "derive them from the same two
+> constants rather than writing the five numbers out", done in the one place
+> that cannot drift.
+
 Lays a snow road through the five-house town, with a short spur to each front
 door.
 
