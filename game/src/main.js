@@ -12,6 +12,7 @@ import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
+import { updateChristmasLights } from './components/ChristmasLights.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
 import { createLighting } from './components/Lighting.js';
@@ -108,6 +109,11 @@ renderer.setAnimationLoop(() => {
   // Also outside it: the snow carries on over the Game Over screen, the
   // same way the lighting stays up rather than cutting to black.
   updateSnow(snow, player);
+  // Outside the freeze for the same reason, and because a town going dark on
+  // the Game Over frame would read as the lights being part of the failure.
+  // No argument: all five plots share one buffer, so this is one pass for the
+  // whole town.
+  updateChristmasLights();
 
   renderer.render(scene, camera);
 });

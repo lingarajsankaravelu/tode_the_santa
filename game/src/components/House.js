@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createChristmasLights } from './ChristmasLights.js';
 
 const MODEL_PATH = '/models/winter_country_house.glb';
 // The House group inside the model is 10.85 units tall, so this puts it at
@@ -42,13 +43,17 @@ const BUILDING_NAME = 'House';
 //    `pCylinder14` -- a pond or path lying 58 units off. Dragging that into
 //    every plot would put a 878-unit slab through the town, so it is excluded
 //    by name and the rest of the group, a tidy well cluster, is kept.
+// The conifers, named because visual/christmas_lights needs the group itself
+// and not just its contents -- the light strings are measured off it.
+const TREES_NAME = 'Trees1';
+
 const PROPS = [
   // Twenty-odd conifers clustered off the house's corner. Deliberately NOT
   // nudged: the snow sitting on these trees lives in the `Snow` group below,
   // not inside `Trees1`, so moving the trees would walk them out from under
   // their own snow caps and leave six white blobs floating where they used to
   // be. At (66, 72) world units from the house they already read as beside it.
-  { name: 'Trees1', offset: { x: 0, z: 0 } },
+  { name: TREES_NAME, offset: { x: 0, z: 0 } },
   { name: 'Kolodec', offset: { x: 0, z: 0 }, exclude: ['pCylinder14'] },
   { name: 'polySurface538', offset: { x: -1, z: -30 } },
   // Lying snow: the roof, and caps on the trees and posts. Left unmoved for
@@ -174,6 +179,7 @@ function createHouse(source, angle) {
   const plot = new THREE.Group();
 
   const building = takePiece(source, plot, BUILDING_NAME);
+  let trees = null;
 
   PROPS.forEach(({ name, offset, exclude }) => {
     const prop = takePiece(source, plot, name, exclude);
@@ -182,7 +188,24 @@ function createHouse(source, angle) {
 
     prop.position.x += offset.x;
     prop.position.z += offset.z;
+
+    if (name === TREES_NAME) trees = prop;
   });
+
+  if (trees) {
+    // Here, and not a line later, which is the whole of the placement
+    // problem. The string is measured off the trees' own boxes, and it has to
+    // come out in the plot's coordinates -- so the plot's matrix has to still
+    // be identity when the boxes are read, which it is only until
+    // plot.scale/rotation are set below. Measuring the source scene instead
+    // would assume Trees1 sits at the top of the loaded hierarchy, and
+    // re-parenting in three.js does not preserve a world transform.
+    plot.updateMatrixWorld(true);
+    // Not an obstacle, and nothing to add to the `houses` array: this is a
+    // child of the plot, so it travels with the yard and Collision.js never
+    // hears about it.
+    plot.add(createChristmasLights(trees, MODEL_SCALE));
+  }
 
   plot.scale.setScalar(MODEL_SCALE);
   // Z is up in this game and the .glb is Y-up, the same quarter turn every
