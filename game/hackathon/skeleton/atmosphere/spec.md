@@ -9,7 +9,23 @@ task because none of them reads correctly alone — shadows need a directional
 light with a real angle, that angle only looks right against a sky, and the sky
 only closes the world if the fog that hides the floor edge is the same colour.
 
-#### Sky and fog
+> **Amended — only the Shadows section is still live.** `visual/night` has
+> landed, and it built the sky, the fog and the lighting rig as a night scene:
+> `Sky.js`, `Lighting.js`, `scene.fog` and the `body` background all exist and
+> are implemented. The two sections below are kept as a record of the daylight
+> version that was specified first; **do not implement them.** The gradient is
+> a day gradient, and the hemisphere light's ground colour is a grass green
+> referring to a lawn that no longer exists — `visual/river_landscape` replaced
+> the floor with terrain and `visual/snow_ground` covered it in snow.
+>
+> Two figures stated below are also simply out of date, and are corrected where
+> they appear: the camera sits **409** units from Tode, not 520, and the floor
+> is the 3280-unit landscape rather than a 3200-unit checkerboard.
+>
+> Shadows were deliberately left out of `visual/night` so that this file keeps
+> them. That section needs the correction marked in it before it is built.
+
+#### Sky and fog — superseded by `visual/night`
 In the `components` directory, add a `Sky.js` file:
 - Export `createSkyTexture()`, returning a `THREE.CanvasTexture` holding a
   vertical two-stop linear gradient: `#4a7fb5` at the top, `#cfe3f0` at the
@@ -23,11 +39,13 @@ In the `components` directory, add a `Sky.js` file:
 In the main entry point `main.js`:
 - Assign the texture to `scene.background`.
 - Add `scene.fog = new THREE.Fog(HORIZON_COLOR, 600, 2400)`. The floor is 3200
-  units across, so its far corner sits about 2263 units from the origin: a `far`
+  units across, so its far corner sits about 2263 units from the origin (the
+  landscape that replaced it is 3280 across and 2319 to the corner, which is
+  why the implemented `far` is 2300): a `far`
   of 2400 dissolves the edge of the world into the sky rather than leaving it
   visible as a straight green cut-off. `near` of 600 keeps Tode and anything
-  he is about to collide with completely clear — the camera sits roughly 520
-  units from him.
+  he is about to collide with completely clear — the camera sits 409 units from
+  him (stated here as 520, which was the old `CAMERA_POSITION`).
 - Note: fog applies to `MeshBasicMaterial` as well, so the checkerboard floor
   recedes correctly without changing its material.
 
@@ -37,7 +55,7 @@ In `style.css`:
   and the default is white. This is the fallback for those first frames, not a
   replacement for `scene.background`.
 
-#### Lighting
+#### Lighting — superseded by `visual/night`
 In the `components` directory, add a `Lighting.js` file. This replaces the two
 lights currently created inline in `main.js`.
 - Export `createLighting()`, returning a `THREE.Group` containing:
@@ -60,11 +78,17 @@ In `Renderer.js`:
 
 In `Lighting.js`, on the directional light:
 - Set `castShadow = true`.
-- Size the shadow camera to `left/right/top/bottom` of `-400 / 400 / 400 /
-  -400`, with `near = 1` and `far = 2000`. The action is tight: enemies spawn at
-  a radius of 220 and houses are placed within 170, so a box of ±400 covers
-  everything that matters at full resolution. Sizing it to the whole 3200-unit
-  floor instead would spend the entire shadow map on empty grass.
+- Size the shadow camera to `left/right/top/bottom` of `-700 / 700 / 700 /
+  -700`, with `near = 1` and `far = 2000`. **Amended from ±400**, which is now
+  wrong rather than merely tight: it was sized on the argument that "enemies
+  spawn at a radius of 220 and houses are placed within 170", and
+  `visual/winter_town` has since moved the houses onto an arc at **480** with
+  their plots reaching **605**. A ±400 box misses the entire town, so the five
+  houses — the heaviest and most important casters in the scene — would cast
+  nothing at all. ±700 matches `WORLD_RADIUS` in `Movement.js`, which is the
+  real bound on where anything can be. It is 3.1× the area at the same
+  `mapSize`, so expect softer, coarser shadow edges; if that is too coarse,
+  raise `mapSize` rather than shrinking the box back.
 - Set `shadow.mapSize` to `2048 x 2048`.
 - Set `shadow.normalBias = 0.5`. Shadow acne is guaranteed otherwise — this
   world is built at a scale of 80 units per tile, and `normalBias` is the knob
@@ -90,22 +114,25 @@ neither, and a loaded `.glb` is a tree, so each loader callback must traverse:
 - `Player.js` — traverse the loaded model, set `castShadow = true` on every
   `Mesh`.
 - `Enemy.js` — the same.
-- `House.js` — set both `castShadow` and `receiveShadow`, so the houses catch
-  each other's shadows and Tode's. Note the model is `clone()`d three times;
-  the flags must be set on each clone or on the source before cloning.
-- `Map.js` — the floor mesh gets `receiveShadow = true`, and its material must
-  change from `MeshBasicMaterial` to `MeshLambertMaterial`, keeping the same
-  checkerboard texture as its `map`. `MeshBasicMaterial` is unlit and will
-  silently ignore `receiveShadow`, which makes it the one blocker here: without
-  this swap, nothing in the game casts a shadow onto anything visible.
+- `House.js` — **already done.** `createHouse` traverses the plot and sets both
+  flags on every mesh, with a comment saying they are inert until this task
+  switches shadows on in `Renderer.js`. Nothing to add.
+- `Map.js` — **this instruction is stale and must not be followed.** It
+  describes swapping the checkerboard floor's `MeshBasicMaterial` for
+  `MeshLambertMaterial`; `visual/river_landscape` removed the checkerboard, the
+  `TILE_SIZE` and the floor mesh outright, and `Map.js` now only assembles the
+  landscape. The landscape's own material is already a lit
+  `MeshStandardMaterial`, so what this section was working around no longer
+  exists. The one thing still wanted from it: set `receiveShadow = true` on the
+  landscape mesh in `Landscape.js`, since a .glb mesh defaults to receiving
+  nothing.
 
 #### Constraints
-- The floor's two greens (`#228B22` / `#90EE90`) are specified exactly in the
-  original `spec.md`, and a lit material will no longer reproduce them
-  byte-for-byte. That is accepted — but do not add tone mapping on top of it,
-  which would shift every colour in the scene for a change this task does not
-  need.
-- Keep `TILE_SIZE` and the checkerboard pattern as they are. The floor doubles
-  as a readout of hop distance (one square = one 80-unit hop), so this task
-  changes how it is lit and nothing about what it shows.
+- The two constraints that stood here about the checkerboard floor — its exact
+  greens `#228B22` / `#90EE90`, and keeping `TILE_SIZE` and the pattern as a
+  readout of hop distance — are gone with the floor itself. Left in, they would
+  send whoever implements shadows looking for a mesh that no longer exists.
+- Do not add tone mapping. That part of the original constraint still stands,
+  and it stands more firmly now: `visual/night` states its expected rendered
+  values as exact sRGB numbers, and a tone map would shift every one of them.
 - `alpha: true` stays on the renderer, as specified in `spec.md`.
