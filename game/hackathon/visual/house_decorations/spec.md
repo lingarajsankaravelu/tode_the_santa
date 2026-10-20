@@ -18,6 +18,28 @@ is the one that can turn into an afternoon.
 All four are decorative. Nothing goes into the `houses` obstacle list and
 `Collision.js` is not touched.
 
+> **Implemented, with four numbers corrected.** Measuring while building found
+> four figures here that do not survive arithmetic. They are marked in place
+> below and the reasoning is in the code:
+>
+> - **`LANTERN_OFFSET` is 22, not 13.** 13 world units is *inside* a spur of
+>   half-width 18, so the lanterns would have stood in the path they line.
+> - **Four lanterns reach 46 units out, not 98.** Two a side at 26 spacing
+>   cannot reach 98; that needs four a side. The "airport runway" argument is
+>   the one with reasoning attached, so there are four.
+> - **The wreath hangs at model y 1.95, not 2.2.** At 2.2 its top lands at 2.97
+>   against a door ending at 2.96 — level with the lintel, which reads as
+>   jammed into the frame.
+> - **The star cannot share the bulbs' geometry.** A `PointsMaterial` carries
+>   one `size` for every point it draws, so "same geometry as the string" and
+>   "16 units against the bulbs' 7" cannot both hold. The size won; the star is
+>   its own one-point `Points`, still shared across plots.
+>
+> One instruction also turned out easier than written: `Snow1` is a wrapper
+> node and not a mesh, like almost everything named in this diorama, so the
+> mesh has to be searched for — but once found its front edge is exactly as
+> described and the eave string came out at the predicted 12 bulbs.
+
 #### What they all share
 
 Build them in **model units** as children of the `plot` group, exactly as
@@ -97,7 +119,10 @@ Measured: the tallest tree's top is at model y `7.41`, which is **55 world
 units** above the plot — the same height as the house — and it stands at model
 `(12.5, 4.4)`.
 
-- One extra point at the tip, in the same geometry as the string.
+- One extra point at the tip. **Not in the same geometry as the string** — see
+  the amendment at the top: a `PointsMaterial` has one size for all its points,
+  so the star needs its own object. It is still built once and shared by the
+  five plots.
 - `STAR_SIZE = 16` world units, against the bulbs' 7. At the town's distance
   that is 15 px with Tode on the doorstep and 7 px from across the field: the
   brightest single thing in the yard, which is the point.
@@ -137,8 +162,8 @@ Two ways to go, and the spec picks the second:
 | Constant | Value | Why |
 |---|---|---|
 | `LANTERN_COUNT` | `4` | Two a side. More reads as an airport runway. |
-| `LANTERN_SPACING` | `26` world units | Along the path, starting 20 units out from the façade, so the furthest is 98 out — short of the road's inner edge at 365, which is 78 units from the façade. They line the path without standing in the road. |
-| `LANTERN_OFFSET` | `±13` world units | Either side of the house's axis, which keeps them clear of a 36-wide spur by a few units. |
+| `LANTERN_SPACING` | `26` world units | Along the path, starting 20 units out from the façade. **Corrected:** with four lanterns that reaches **46**, not the 98 stated here — 98 would need four a side. 46 is comfortably short of the road's inner edge, 78 units from the façade. |
+| `LANTERN_OFFSET` | `±22` world units | **Corrected from ±13**, which is inside a 36-wide spur's half-width of 18 and would have put the lanterns in the path. 22 clears it by 4. |
 | `LANTERN_HEIGHT` | `11` world units | Head height for a path light, and the same height as the door centre. |
 | `LANTERN_SIZE` | `9` world units | Between a bulb and the star. |
 | `LANTERN_COLOR` | `0xffcc77` | The window amber from `visual/night`, deliberately — a lantern is a lamp, not a Christmas bulb, and matching the windows is what makes it read as the house's own light. |
@@ -180,12 +205,17 @@ air. Find the door by name and measure it; do not derive it from the house box.
   imported.
 - `WREATH_RADIUS = 4.5` world units, `WREATH_TUBE = 1.2`. That is a 9-unit
   wreath on a 14-wide door, which is the right proportion.
-- Centre it at the door's x and z, at **model y 2.2** — the upper third of the
-  door, where a wreath hangs — with the torus rotated to lie in the façade
+- Centre it at the door's x and z, at **model y 1.95** — **corrected from
+  2.2**, which puts the wreath's top at 2.97 against a door ending at 2.96,
+  level with the lintel. 1.95 leaves 1.8 world units of clear door above it —
+  with the torus rotated to lie in the façade
   plane (its default plane is XY and the façade is XY in model space, so the
   rotation needed is none; verify rather than assume).
-- Push it `+Z` by `WREATH_TUBE` so it rests against the door rather than
-  through it.
+- Push it `+Z` by `WREATH_TUBE * 1.15` so it rests against the door rather
+  than through it. At exactly `WREATH_TUBE` the back of the ring lands
+  precisely on the door's plane, which is the coplanar case `GROUND_Z` and the
+  road's `polygonOffset` both exist for; the extra 15% is 0.18 world units and
+  removes the question.
 - `MeshStandardMaterial`, `0x2f6b3f` — the `PINE` green from
   `generate_river_landscape.mjs`, so the wreath matches the conifers. Roughness
   1, metalness 0, `flatShading: true`.
