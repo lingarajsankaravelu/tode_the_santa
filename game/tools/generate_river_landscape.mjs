@@ -38,8 +38,53 @@ const WATER = 0x3f8fd4
 // and darker so the caps still separate from the snowfield they stand in.
 const SNOW = 0xf2f4f7
 const SNOW_SHADE = 0xd4e0ec
-const GROUND_SNOW = 0xe9eef5
-const GROUND_SNOW_SHADE = 0xcfdceb
+// The bright crest and the cool hollow the drift field below blends between.
+// The hollow is a definite blue-grey rather than a slightly grey white: snow in
+// shadow is blue, because what lights a hollow is the sky and not the sun, and
+// that blue is most of what tells the eye it is looking at snow. The pair gives
+// 43 levels of rendered crest-to-hollow contrast. If the fields want more form,
+// this is the dial -- 0xacc1da gives 55 and 0x9fb6d2 gives 67, and nothing else
+// has to change.
+const GROUND_SNOW = 0xe6eef8
+const GROUND_SNOW_SHADE = 0xb8cadf
+
+// Snow does not read as snow from a flat colour the way grass reads as grass.
+// The eye accepts a flat green plane as a lawn; it reads a flat white plane as
+// paper. The first attempt at this recoloured the fields and relied on the
+// per-face hex() jitter for texture, and that does not work: the jitter is
+// high-frequency noise, and at the distance the camera sits -- every triangle
+// is 37 world units against a view 2500 units deep -- it averages straight
+// back to flat white. The play area makes it worse, being guaranteed dead flat
+// out to FLAT_R: all 1725 basin faces share the single normal (0,-1,0), so
+// there is no geometric shading there at all and colour is carrying everything.
+//
+// So the fields take a smooth drift field as well: broad bright crests and
+// cool hollows varying over tens of units, which is the form snow actually has.
+// Tuned by measurement, not by eye: these frequencies put a light-to-dark patch
+// every 174 world units across X and 349 across Z, so two to four hops of
+// Tode's 80 cross one. Deliberately anisotropic -- equal frequencies gave an
+// even blotch, and drifts lie along a wind direction. An earlier pass used a
+// third of these and put only two patches across the whole basin, which is a
+// single gradient rather than snow.
+// Colour only, and deliberately so -- real drifts are geometry, and raising the
+// snow where Tode walks would push the ground up through his feet and break the
+// flat-basin agreement Landscape.js has with WORLD_RADIUS.
+const drift = (x, z) => {
+  const d = 0.5
+    + 0.30 * Math.sin(x * 0.38 + 0.4) * Math.cos(z * 0.32)
+    + 0.13 * Math.sin(x * 0.78 - z * 0.63 + 1.1)
+    + 0.07 * Math.cos(x * 1.55 + z * 1.24)
+  return Math.max(0, Math.min(1, d))
+}
+
+// Blends in sRGB byte space, which is where the palette is written.
+const mixHex = (a, b, t) => [16, 8, 0].reduce((out, s) => {
+  const av = (a >> s) & 255
+  const bv = (b >> s) & 255
+  return out | (Math.round(av + (bv - av) * t) << s)
+}, 0)
+
+const snowAt = (x, z) => mixHex(GROUND_SNOW_SHADE, GROUND_SNOW, drift(x, z))
 
 // --------------------------------------------------------------- mesh buffer
 const mesh = () => ({ pos: [], nrm: [], col: [] })
@@ -129,15 +174,18 @@ for (let i = 0; i < GRID; i++) {
       // surface is right in any season -- white there would read as ice, and
       // the river is not frozen. Rock keeps its half of the high ground, since
       // faces too steep to hold snow are what give the hills their shape.
-      let base = GROUND_SNOW
-      if (my < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND                  // riverbed
-      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : GROUND_SNOW_SHADE  // banks
-      else if (my > 2.2) base = rnd() < 0.5 ? ROCK : GROUND_SNOW_SHADE           // high ground
-      else if (rnd() < 0.3) base = GROUND_SNOW_SHADE
-      // The jitter is doing more work on white than it was on green: snow
-      // with no per-face variation reads as a void, and this is the only thing
-      // giving the fields any texture at all.
-      tri(land, f[0], f[1], f[2], hex(base, 0.09))
+      //
+      // The old random 30% scatter to the shade colour is gone: it was more of
+      // the same per-face noise, and snowAt() now supplies the two tones as
+      // broad form instead.
+      let base = snowAt(mx, mz)
+      if (my < WATER_Y + 0.35 && dist < BANK * 2.4) base = SAND               // riverbed
+      else if (dist < BANK * 2.9) base = rnd() < 0.4 ? SAND : snowAt(mx, mz)  // banks
+      else if (my > 2.2) base = rnd() < 0.5 ? ROCK : snowAt(mx, mz)           // high ground
+      // Jitter stays, but as a finishing grain on top of the drift rather than
+      // as the only source of variation: it breaks up the smooth gradient so
+      // the blend does not band across the flat basin.
+      tri(land, f[0], f[1], f[2], hex(base, 0.06))
     }
   }
 }
@@ -348,8 +396,13 @@ const json = { asset: { version: '2.0', generator: 'tod_the_frog procedural low-
   meshes: [{ name: 'RiverLandscape', primitives: [] }],
   materials: [], accessors: [], bufferViews: [], buffers: [] }
 
+// Roughness is a flat 1, not 0.95. At 0.95 a near-white surface this large
+// keeps a broad specular sheen, and it is why the snowfield read as glossy
+// white plastic next to the house, whose own Snow2 material is roughness 1.
+// There is no sun disc in this scene to catch a highlight, so the sheen buys
+// nothing and costs the matte surface snow needs.
 json.materials.push({ name: 'Landscape', doubleSided: true,
-  pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.95 } })
+  pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 1 } })
 json.materials.push({ name: 'Water', doubleSided: true, alphaMode: 'BLEND',
   pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 0.78], metallicFactor: 0.05, roughnessFactor: 0.15 } })
 

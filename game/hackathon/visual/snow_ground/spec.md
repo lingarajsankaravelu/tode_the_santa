@@ -45,13 +45,18 @@ const PETAL_Y = 0xe8c54a
 Do **not** simply point the ground at `SNOW` and `SNOW_SHADE`. The mountains
 along the far edge already use those above their snow line, and if the fields
 are the same white the horizon dissolves — the mountains stop reading as
-distance and become a pale smear. Add two slightly cooler, darker constants for
+distance and become a pale smear. Add two cooler, darker constants for
 the ground so the caps still separate from it:
 
 ```js
-const GROUND_SNOW = 0xe9eef5
-const GROUND_SNOW_SHADE = 0xcfdceb
+const GROUND_SNOW = 0xe6eef8
+const GROUND_SNOW_SHADE = 0xb8cadf
 ```
+
+The hollow colour is a definite blue-grey, not a slightly grey white. Snow in
+shadow is blue, because what lights a hollow is the sky rather than the sun, and
+that blue is most of what tells the eye it is looking at snow at all. An earlier
+pass used `0xcfdceb` here and the fields read as white paper.
 
 #### The terrain colouring
 
@@ -83,9 +88,71 @@ piece of ground and they should not all become the same white:
 - **The 30% scatter** → `GROUND_SNOW_SHADE`, so the fields keep the two-tone
   mottling that stops them reading as one flat sheet.
 
-Keep the `hex(base, 0.09)` jitter exactly as it is. It is doing more work on
-white than it was on green — snow with no per-face variation reads as a void,
-and this is the only thing giving the fields any texture at all.
+#### A flat colour is not enough, and the jitter does not save it
+
+**This is the part the first implementation got wrong, and the correction is the
+main content of this spec.** The original text said to keep the `hex(base, 0.09)`
+jitter as the thing "giving the fields any texture at all". It gives none. In the
+browser the result was, in the user's words, "just white and glossy".
+
+Two measurements say why:
+
+- The jitter is **high-frequency** noise — one random brightness per triangle.
+  A grid triangle is 37 world units; the camera sits 400 units back and sees
+  2500 units deep. At that density the noise averages back to flat white before
+  the eye resolves it.
+- The play area has **no geometric shading whatsoever**. `FLAT_R` guarantees the
+  basin is dead flat, and all **1,712** basin faces share the single normal
+  `(0,-1,0)`. Every face takes identical light, so colour is carrying the entire
+  appearance of the ground Tode actually stands on.
+
+Grass survives a flat colour because the eye accepts a flat green plane as a
+lawn. It reads a flat white plane as paper. Snow reads through **broad form** —
+a bright crest here, a cool hollow there — so the generator needs a smooth drift
+field as well as the grain:
+
+```js
+const drift = (x, z) => {
+  const d = 0.5
+    + 0.30 * Math.sin(x * 0.38 + 0.4) * Math.cos(z * 0.32)
+    + 0.13 * Math.sin(x * 0.78 - z * 0.63 + 1.1)
+    + 0.07 * Math.cos(x * 1.55 + z * 1.24)
+  return Math.max(0, Math.min(1, d))
+}
+const snowAt = (x, z) => mixHex(GROUND_SNOW_SHADE, GROUND_SNOW, drift(x, z))
+```
+
+with `mixHex` blending in sRGB byte space, where the palette is written.
+
+The frequencies are chosen by measurement, not by eye: they put a light-to-dark
+patch every **174** world units across X and **349** across Z, so two to four of
+Tode's 80-unit hops cross one. They are deliberately anisotropic — equal
+frequencies gave an even blotch, and drifts lie along a wind direction. A first
+attempt at a third of these frequencies fitted only two patches across the whole
+basin, which is one gradient rather than snow.
+
+The cascade then takes `snowAt(mx, mz)` wherever it took a flat snow constant,
+and the old `else if (rnd() < 0.3)` scatter is **removed** — it was more of the
+same per-face noise, and the drift field now supplies both tones as form.
+
+Keep the per-face jitter, but drop it to `hex(base, 0.06)`. Its job is now a
+finishing grain that stops the blend banding across the flat basin, not the
+only source of variation.
+
+Measured result: 43 levels of rendered crest-to-hollow contrast, and **20**
+levels of variation surviving a 4-unit tile average — which is the number that
+matters, because it is what the eye sees as drifts. Before the drift field that
+figure was approximately zero.
+
+#### Roughness, or why it looked glossy
+
+Set the `Landscape` material's `roughnessFactor` to **`1`**, not `0.95`.
+
+At 0.95 a near-white surface 3,280 units across keeps a broad specular sheen,
+and that sheen is why the snowfield read as glossy white plastic next to the
+house — whose own `Snow2` material is `roughnessFactor: 1`, which is exactly the
+comparison that exposed it. There is no sun disc in this scene for a highlight
+to catch, so the sheen buys nothing and costs the matte surface snow needs.
 
 #### Wildflowers come out
 
@@ -133,19 +200,31 @@ the verges left bright.
 
 #### Verification
 
-1. Re-run the generator and check it still reports its two guarantees — the flat
-   middle out to model radius 17, and the river's nearest water vertex no closer
-   than about 26.6. Both are geometry and a colour change cannot move them, but
-   the generator is being re-run and that is the moment to confirm the shape did
-   not drift.
-2. The `.glb` should come back at roughly 2.6 MB and ~25,000 triangles, slightly
-   less with the flowers gone. A large change in either means something other
-   than colour was edited.
+1. Re-run the generator and confirm its two guarantees — the flat middle out to
+   model radius 17, and the river's nearest water vertex no closer than about
+   26.6. Both are geometry and a colour change cannot move them, but the
+   generator is being re-run and that is the moment to confirm the shape did not
+   drift. Note that the generator does **not** print these; it prints only
+   triangles and bytes. They have to be read back out of the `.glb`.
+2. The `.glb` should come back at roughly 2.5 MB and **23,100** triangles, down
+   from 24,982. The drop is 1,882, which is 170 flowers at 11 triangles each —
+   so if the number lands there, nothing but the flowers left.
+   Expect the pines, shoreline rocks and mountains to sit in slightly different
+   places than before: removing the flower loop and the 30% scatter changes how
+   many times `rnd()` is called before those scatters run. The terrain *shape*
+   is unaffected, since `height()` does not draw on `rnd()` at all.
 3. In the browser: white fields, green pines, the river still blue, rocks and
    hill faces still visible as shape rather than flat white, and the mountains
    still readable as distant.
 4. Check the horizon specifically. This is the thing most likely to go wrong, and
    the reason for the two new constants.
+
+   Worth being honest about the margin: the brightest drift crest renders at 225
+   against 227 for a flat-facing mountain cap, so the two are not separated at
+   the top of the range. What carries the horizon is that the *average* field is
+   near 200, and that the mountains' lower two-thirds are `ROCK` — so what
+   actually meets the snowfield is grey, not white. If the horizon does dissolve,
+   darken `GROUND_SNOW` rather than touching `SNOW`.
 
 #### Research
 
@@ -155,8 +234,20 @@ snow layer for the ground patch that came with it — thrown away by
 that snow is not missed, which is a small retrospective confirmation that
 dropping it was right.
 
-The open question is depth rather than colour: real snow has drifts and the
-grid here is a smooth heightfield. Whether the generator should raise snow
-against the windward side of the hills and the houses is a much larger change —
-it would alter the terrain the play area is guaranteed flat within — and belongs
-nowhere near this task.
+The open question is depth rather than colour. The drift field fakes drifts with
+shading, and it cannot do more than that: real drifts are geometry, and raising
+the snow where Tode walks would push the ground up through his feet and break the
+flat-basin agreement `Landscape.js` has with `WORLD_RADIUS`. Snow banked against
+the windward side of the hills and the houses — *outside* the basin, where the
+terrain is already free to move — is the real version of this and is a much
+larger change.
+
+One latent problem found while measuring, and deliberately **not** fixed here.
+Every basin face has the normal `(0,-1,0)`: the terrain grid is wound so its
+normals point down, away from the sky. It renders correctly today only because
+the `Landscape` material is `doubleSided`, so three.js flips the normal for the
+back-facing fragments the camera actually sees. Shadows are not enabled yet, and
+when `skeleton/atmosphere` turns them on, a ground plane whose normals face away
+from the light is the kind of thing that produces shadow acne across the whole
+map. Fixing it means reversing the winding in the grid loop, which touches every
+land triangle, and it belongs in the task that switches shadows on.
