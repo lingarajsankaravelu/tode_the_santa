@@ -65,7 +65,7 @@ back the same shape with new colours. **Nothing in `game/src/` changes.**
 `Landscape.js` keys off the material names `Landscape` and `Water`, and a colour
 change does not touch those.
 
-#### The palette is already half built
+#### The palette groundwork (superseded above, kept for the land)
 
 The generator has these constants at the top, and two of them are the ones we
 need:
@@ -84,18 +84,30 @@ const PETAL_Y = 0xe8c54a
 Do **not** simply point the ground at `SNOW` and `SNOW_SHADE`. The mountains
 along the far edge already use those above their snow line, and if the fields
 are the same white the horizon dissolves — the mountains stop reading as
-distance and become a pale smear. Add two cooler, darker constants for
-the ground so the caps still separate from it:
+distance and become a pale smear. #### The snow is the roof's white, and nothing else
 
 ```js
-const GROUND_SNOW = 0xe6eef8
-const GROUND_SNOW_SHADE = 0xb8cadf
+const GROUND_SNOW = 0xffffff
 ```
 
-The hollow colour is a definite blue-grey, not a slightly grey white. Snow in
-shadow is blue, because what lights a hollow is the sky rather than the sun, and
-that blue is most of what tells the eye it is looking at snow at all. An earlier
-pass used `0xcfdceb` here and the fields read as white paper.
+This number is not chosen, it is **copied**. `winter_country_house.glb`'s `Snow2`
+material is `baseColorFactor [1,1,1,1]` with `metallicFactor 0` and
+`roughnessFactor 1`, no `COLOR_0` on any of its nine primitives, and the file
+contains **zero** textures and zero images. So the snow on the roof is flat
+`0xffffff` lit by nothing but its own shape, and the snow bed now carries the
+identical colour against an identical material. The two are the same material in
+the same light.
+
+Earlier passes tinted this — a cool white over a blue-grey hollow, blended by the
+drift field, with a whole argument about snow in shadow being blue. The argument
+was sound and it is deliberately gone: asked to match the roof, the answer is to
+match the roof, and the bed's appearance is carried entirely by its relief and
+its smooth normals. `mixHex` survives because the mountains use it for their snow
+line; `drift` survives as relief only.
+
+The mountain caps keep `SNOW = 0xf2f4f7` rather than going pure white, which is
+what now separates them from the fields — the opposite polarity to the original
+plan below, and the horizon reads either way as long as the two differ.
 
 #### The terrain colouring
 
@@ -182,10 +194,43 @@ be **0°** and the brightness jump **0.0 levels**. Measured after this change:
 lost to the smoothing — the hills keep a brightness std of 11.1 against 12.0
 flat, and 20.6° of mean normal tilt.
 
-The mountains are left flat-shaded on purpose: they are meant to be angular
-crags, and their faceting reads as rock. If triangles are still visible *on the
-peaks* after this, they are the remaining flat-shaded white surface in the scene
-and want the same treatment.
+**The mountains get the same treatment**, because their caps are white too and
+they were the remaining flat-shaded white surface in the scene. They have no
+analytic surface to differentiate — the rings are a stack of jittered rows — so
+they are built as a vertex list plus a face list and the normals are **averaged**
+at the corners, then turned outwards from the column axis so one sign error
+cannot light a whole range from the inside.
+
+Their faceting is not lost, and this is the point worth understanding: the
+ridges live in the *geometry*, not the shading. `colR` varies each column's
+width and `colSnow` ragged-edges its snow line, so the mountains stay angular
+crags while shading across them continuously.
+
+Two details, both of which cost a measurement to find:
+
+- **The snow line becomes a per-vertex blend, not a per-face coin toss.** The
+  original picked `rnd() < 0.78 ? SNOW : SNOW_SHADE` per triangle, which is a
+  colour discontinuity at every edge and would redraw the triangles however the
+  normals were computed. Now it is a smoothstep across the line evaluated once
+  per corner, and the jitter with it. The ragged line survives in `colSnow`,
+  which is per column.
+- **The base cap must take the ring's smoothed normals**, not a flat normal of
+  its own. The cap shares every corner with the flank, and a flat fan there was
+  the single remaining disagreement on the whole mountain — **89.6°** of it,
+  right on the base rim. The shading it then gets is not what a downward-facing
+  fan should have, which costs nothing on a surface that faces away from the
+  camera and into the ground.
+
+Final measured state, which is the acceptance test for this whole task:
+
+| Surface | Worst normal disagreement at a shared corner | Brightness jump |
+|---|---|---|
+| Snow bed | 0.022° | 0.00 |
+| Mountains | 0.023° | 0.00 |
+| Terrain, pines, boulders (flat by design) | 139° | 10.7 mean |
+
+Both white surfaces are at floating-point zero. The flat row is left alone
+deliberately: earth, rock and pines are what the low-poly look is for.
 
 #### Recolouring the ground does not work either — the snow is a second surface
 

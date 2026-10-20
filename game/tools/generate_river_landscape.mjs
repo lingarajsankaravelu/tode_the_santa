@@ -1,5 +1,11 @@
 // Procedural low-poly river landscape -> public/models/river_landscape.glb
-// No deps: writes glTF 2.0 binary by hand. Flat-shaded, vertex-coloured.
+// No deps: writes glTF 2.0 binary by hand. Vertex-coloured.
+//
+// Flat-shaded, EXCEPT the two white surfaces: the snow bed and the mountains
+// are smooth-shaded, with a normal and a colour at every corner. Flat shading
+// is the low-poly look and it is right for earth, rock, pines and boulders, but
+// on anything near-white every triangle takes a visibly different amount of
+// light and you see each one. See smoothTri().
 // Regenerate with:  node tools/generate_river_landscape.mjs
 
 import { writeFileSync, mkdirSync } from 'node:fs'
@@ -43,15 +49,18 @@ const WATER = 0x3f8fd4
 // and darker so the caps still separate from the snowfield they stand in.
 const SNOW = 0xf2f4f7
 const SNOW_SHADE = 0xd4e0ec
-// The bright crest and the cool hollow the drift field below blends between.
-// The hollow is a definite blue-grey rather than a slightly grey white: snow in
-// shadow is blue, because what lights a hollow is the sky and not the sun, and
-// that blue is most of what tells the eye it is looking at snow. The pair gives
-// 43 levels of rendered crest-to-hollow contrast. If the fields want more form,
-// this is the dial -- 0xacc1da gives 55 and 0x9fb6d2 gives 67, and nothing else
-// has to change.
-const GROUND_SNOW = 0xe6eef8
-const GROUND_SNOW_SHADE = 0xb8cadf
+// The same white as the snow on the house's roof, which is where this number
+// comes from: winter_country_house.glb's Snow2 material is baseColorFactor
+// [1,1,1,1] with no vertex colours and no textures in the file at all, so the
+// roof snow is flat 0xffffff lit by nothing but its own shape. The snow bed now
+// carries the identical colour against the identical material -- metallic 0,
+// roughness 1 -- so the two are the same material in the same light, and the
+// bed's appearance is carried entirely by its relief and its smooth normals.
+//
+// Earlier versions tinted this (a cool white over a blue-grey hollow, blended
+// by the drift field). It was a reasonable idea and it is deliberately gone:
+// asked to match the roof, the answer is to match the roof.
+const GROUND_SNOW = 0xffffff
 
 // Snow does not read as snow from a flat colour the way grass reads as grass.
 // The eye accepts a flat green plane as a lawn; it reads a flat white plane as
@@ -89,7 +98,8 @@ const mixHex = (a, b, t) => [16, 8, 0].reduce((out, s) => {
   return out | (Math.round(av + (bv - av) * t) << s)
 }, 0)
 
-const snowAt = (x, z) => mixHex(GROUND_SNOW_SHADE, GROUND_SNOW, drift(x, z))
+// mixHex survives because the mountains use it for their snow line. drift()
+// survives too, but only as relief now -- see snowY().
 
 // --------------------------------------------------------------- mesh buffer
 const mesh = () => ({ pos: [], nrm: [], col: [] })
@@ -329,7 +339,7 @@ for (let i = 0; i < GRID; i++) {
     const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([ci, cj]) => {
       const x = gridX(ci), z = gridX(cj)
 
-      return { p: [x, snowY(x, z), z], n: snowNormal(x, z), c: hex(snowAt(x, z)) }
+      return { p: [x, snowY(x, z), z], n: snowNormal(x, z), c: hex(GROUND_SNOW) }
     })
     const [sa, sb, sc, sd] = corners
     // Wound the opposite way round to the land, so the winding agrees with the
@@ -448,28 +458,94 @@ function mountain (m, cx, cz, baseY, radius, h, seg) {
     cz + rng(-radius * 0.1, radius * 0.1)
   ]
 
-  const faceColor = (y, i) => {
-    const line = snowLine + colSnow[i]
-    if (y > line + h * 0.06) return hex(rnd() < 0.78 ? SNOW : SNOW_SHADE, 0.05)
-    if (y > line - h * 0.06) return hex(rnd() < 0.5 ? SNOW_SHADE : ROCK, 0.1) // patchy transition
-    return hex(ROCK, 0.14)
-  }
+  // Smooth-shaded, for the same reason the snow bed is: a flat-shaded white cap
+  // shows every one of its triangles. The ridges are kept by the geometry --
+  // colR varies the width of each column and colSnow ragged-edges its snow line
+  // -- so the mountains stay angular crags without the shading breaking into
+  // facets across the snow.
+  //
+  // Built as a vertex list plus a face list so the normals can be averaged at
+  // the corners. Unlike the snow bed there is no analytic surface to
+  // differentiate here, the rings being a stack of jittered rows.
+  const verts = []
+  const cols = []
+  const rowIdx = rings.map((r, l) => r.map((pt, i) => {
+    verts.push(pt)
+    cols.push(i)
 
+    return verts.length - 1
+  }))
+
+  verts.push(apex)
+  cols.push(0)
+  const apexIdx = verts.length - 1
+
+  const faces = []
   for (let l = 0; l < rings.length - 1; l++) {
-    const lo = rings[l], hi = rings[l + 1]
     for (let i = 0; i < seg; i++) {
       const n = (i + 1) % seg
-      // Split the quad so each triangle can take the snow line separately.
-      tri(m, lo[i], lo[n], hi[n], faceColor((lo[i][1] + lo[n][1] + hi[n][1]) / 3, i))
-      tri(m, lo[i], hi[n], hi[i], faceColor((lo[i][1] + hi[n][1] + hi[i][1]) / 3, i))
+      faces.push([rowIdx[l][i], rowIdx[l][n], rowIdx[l + 1][n]])
+      faces.push([rowIdx[l][i], rowIdx[l + 1][n], rowIdx[l + 1][i]])
     }
   }
-  for (let i = 0; i < seg; i++) {
-    const n = (i + 1) % seg
-    tri(m, top[i], top[n], apex, faceColor(apex[1], i))
+  const topRow = rowIdx[rowIdx.length - 1]
+  for (let i = 0; i < seg; i++) faces.push([topRow[i], topRow[(i + 1) % seg], apexIdx])
+
+  const normals = verts.map(() => [0, 0, 0])
+  for (const [ia, ib, ic] of faces) {
+    const a = verts[ia], b = verts[ib], c = verts[ic]
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2]
+    const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]
+    const fn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    for (const k of [ia, ib, ic]) {
+      normals[k][0] += fn[0]; normals[k][1] += fn[1]; normals[k][2] += fn[2]
+    }
   }
-  // Cap the base so the silhouette stays solid from low angles.
-  for (let i = 1; i < seg - 1; i++) tri(m, rings[0][0], rings[0][i + 1], rings[0][i], hex(ROCK, 0.1))
+
+  const smoothed = normals.map((nm, k) => {
+    const len = Math.hypot(nm[0], nm[1], nm[2]) || 1
+    // Turned outwards from the column's own axis if the winding came out the
+    // other way, so one sign error cannot light a whole range from the inside.
+    // The apex sits on the axis, which is what the radius term is for.
+    const ref = [verts[k][0] - cx, radius * 0.5, verts[k][2] - cz]
+    const sign = (nm[0] * ref[0] + nm[1] * ref[1] + nm[2] * ref[2]) < 0 ? -1 : 1
+
+    return [sign * nm[0] / len, sign * nm[1] / len, sign * nm[2] / len]
+  })
+
+  // Per vertex, not per face, and blended across the line rather than decided
+  // by a coin toss per triangle: the jitter is evaluated once for each corner,
+  // so every triangle meeting there agrees and the variation interpolates as a
+  // gradient instead of breaking into patches. The ragged line survives in
+  // colSnow, which is per column.
+  const colors = verts.map((pt, k) => {
+    const line = snowLine + colSnow[cols[k]]
+    const t = Math.min(1, Math.max(0, (pt[1] - (line - h * 0.06)) / (h * 0.12)))
+
+    return hex(mixHex(ROCK, SNOW, t * t * (3 - 2 * t)), 0.07)
+  })
+
+  for (const [ia, ib, ic] of faces) {
+    smoothTri(m,
+      [verts[ia], verts[ib], verts[ic]],
+      [smoothed[ia], smoothed[ib], smoothed[ic]],
+      [colors[ia], colors[ib], colors[ic]])
+  }
+  // Cap the base so the silhouette stays solid from low angles. Takes the same
+  // smoothed normals and colours as the bottom ring rather than a flat normal
+  // of its own: the cap shares every one of its corners with the flank, and a
+  // flat fan there was the one remaining disagreement on the whole mountain --
+  // 89.6 degrees of it, right on the base rim. The shading it gets is not what
+  // a downward-facing fan should have, which costs nothing on a surface that
+  // faces away from the camera and into the ground.
+  for (let i = 1; i < seg - 1; i++) {
+    const ring0 = [rowIdx[0][0], rowIdx[0][i + 1], rowIdx[0][i]]
+
+    smoothTri(m,
+      ring0.map((k) => verts[k]),
+      ring0.map((k) => smoothed[k]),
+      ring0.map((k) => colors[k]))
+  }
 }
 
 function pine (m, x, z) {
