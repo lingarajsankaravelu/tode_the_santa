@@ -47,6 +47,12 @@ const YARD_DEPTH = 146.8;
 // Gap left between the road's outer edge and the innermost conifer. Small on
 // purpose -- the branches that reach 333.2 are canopy, overhanging a verge,
 // and a lane that passes under them sits in the town rather than beside it.
+//
+// Conservative, as it turns out, and left alone for it. 333.2 is the radial
+// PROJECTION of the nearest branch onto its own plot's axis; its true distance
+// from the origin is 344.0, because the lateral offset adds to it. So the
+// lane's outer edge at 325.2 clears the nearest plot vertex by 18.8 units, and
+// does so at all five plots, which are clones of one another.
 const ROAD_CLEARANCE = 8;
 // About 11 ft at this project's 2.7 inches per unit: a lane, not a motorway.
 const ROAD_WIDTH = 50;
@@ -139,7 +145,7 @@ function createRoadMaterial() {
     // Belt and braces, and worth saying so. Camera.js's NEAR_PLANE is 10 now,
     // not the 0.1 this spec's depth table was written against, so the buffer
     // resolves about 0.001 units at town distance against a 0.09 gap -- ninety
-    // times the margin it needs. Kept because 885 units of coplanar surface
+    // times the margin it needs. Kept because 681 units of coplanar surface
     // should not depend on a single setting in another file staying put.
     //
     // NOT depthWrite: false with a render order. That appears to work and then
