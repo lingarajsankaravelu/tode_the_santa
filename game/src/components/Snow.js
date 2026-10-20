@@ -4,7 +4,15 @@ const FLAKE_COUNT = 900;
 // World units across, not pixels: sizeAttenuation is on, so a flake near the
 // player comes out around 16 pixels and one at the band's edge around six.
 const FLAKE_SIZE = 6;
-const FLAKE_OPACITY = 0.85;
+// Dimmed by hand, because this is the one surface in the game the lights
+// cannot reach: PointsMaterial is unlit. Everything else darkened when the
+// scene moved to night; left alone, 900 white flakes at 0.85 against a
+// near-black sky stay the brightest thing in the frame after the windows and
+// read as television static rather than as weather.
+const FLAKE_OPACITY = 0.55;
+// So the flakes take the moonlight like everything else does. Multiplied into
+// the gradient in createFlakeTexture below, which stays white.
+const FLAKE_COLOR = 0xaebfd6;
 
 // The band is sized to the camera's frustum, which is the only thing that
 // decides whether the snow is visible at all.
@@ -128,6 +136,7 @@ export function createSnow() {
 
   const material = new THREE.PointsMaterial({
     map: createFlakeTexture(),
+    color: FLAKE_COLOR,
     size: FLAKE_SIZE,
     sizeAttenuation: true,
     transparent: true,
