@@ -23,7 +23,7 @@ import { setSackFull } from './Player.js';
 import { groundHeightAt } from './Terrain.js';
 import { MAX_ALTITUDE, sleighVelocity } from './Movement.js';
 import { play } from './Sound.js';
-import { isRunLive, triggerGameOver } from './GameState.js';
+import { isRunLive, triggerGameOver, triggerWin } from './GameState.js';
 
 // Where a gift has to land: a point on the ground, on the house's own angle,
 // at a fixed radius from the origin.
@@ -480,6 +480,13 @@ function deliverGift(player, drop, index) {
   player.animator?.setExpression('smile', 1, { seconds: 1.2 });
 
   renderCount();
+
+  // The end of the story, and this module is the one that knows: five gifts
+  // caught, five houses served. `GameState.js` owns the flag, the screen and
+  // the restart; `main.js` lights the town and stops the clock. None of the
+  // three has to learn what the other two are, which is the arrangement
+  // `win_state/spec.md` spends most of its length protecting.
+  if (allDelivered()) triggerWin();
 }
 
 function removeDrop(scene, drop) {

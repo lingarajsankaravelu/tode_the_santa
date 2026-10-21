@@ -153,6 +153,23 @@ const TWINKLE_RATE = 0.03;
 // phases would.
 const PHASE_STEP = 2.399;
 
+// Winning raises the floor to 1 over this many seconds, at which point `wave`
+// has no effect and every bulb sits steady at its base colour. The town comes
+// on, and that is what the end of the story looks like --
+// `conclusion/win_state/spec.md` has the reasoning for why the ending is this
+// rather than a camera move.
+//
+// 1.6 seconds: long enough to read as the town coming on rather than as a
+// light switch, short enough to be finished before the overlay has faded in
+// over it.
+const CELEBRATE_SECONDS = 1.6;
+// Seconds, and the same clamp every timed system here uses. This one cannot
+// bank a tab-switch either way -- `updateChristmasLights` runs outside the
+// freeze, so the delta is read on every frame of the game's life -- but a
+// first frame that arrives after 10 MB of glTF would otherwise finish the
+// celebration before it started, if a run were ever won that quickly.
+const MAX_DELTA = 0.1;
+
 // The five plots are identical in model space -- House.js clones one loaded
 // scene and only the plot's own transform differs -- so the string's vertices
 // are the same numbers five times over. One geometry and one material serve
@@ -167,6 +184,12 @@ const PHASE_STEP = 2.399;
 // arrangement.
 let shared = null;
 let twinkle = 0;
+// The celebration. A module-level flag in the same spirit as `shared` above:
+// the five plots are one buffer, so the town comes on in one piece or not at
+// all, and there is nothing per-plot to hang this off.
+let celebrating = false;
+let celebrated = 0;
+const clock = new THREE.Clock();
 
 /**
  * A bulb, as a 32px radial gradient with a hot core.
@@ -648,7 +671,26 @@ export function createChristmasLights(pieces, scale) {
  * Brightness only. Shifting the hue would lose the four-colour string, which
  * is the thing that makes it read as Christmas lights.
  */
+/**
+ * The run has been won: bring the whole town up to full and leave it there.
+ *
+ * Idempotent, and it does not need to know whether the lights are built yet --
+ * all it does is start a count that `updateChristmasLights` reads.
+ */
+export function celebrate() {
+  celebrating = true;
+}
+
+/** Back to twinkling, for the next run. */
+export function resetChristmasLights() {
+  celebrating = false;
+  celebrated = 0;
+}
+
 export function updateChristmasLights() {
+  // Before the readiness return, like every other delta in this project.
+  const delta = Math.min(clock.getDelta(), MAX_DELTA);
+
   if (!shared) return;
 
   const attribute = shared.geometry.attributes.color;
@@ -656,9 +698,19 @@ export function updateChristmasLights() {
 
   twinkle += TWINKLE_RATE;
 
+  if (celebrating && celebrated < CELEBRATE_SECONDS) celebrated += delta;
+
+  // The floor climbs from 0.6 to 1 while the town comes on. At 1 the wave
+  // below has no effect at all, which is the twinkle stopping -- not a second
+  // code path, just the same line with nothing left to vary.
+  const floor = celebrating
+    ? TWINKLE_FLOOR +
+      (1 - TWINKLE_FLOOR) * Math.min(celebrated / CELEBRATE_SECONDS, 1)
+    : TWINKLE_FLOOR;
+
   for (let index = 0; index < shared.count; index += 1) {
     const wave = 0.5 + 0.5 * Math.sin(twinkle + index * PHASE_STEP);
-    const brightness = TWINKLE_FLOOR + (1 - TWINKLE_FLOOR) * wave;
+    const brightness = floor + (1 - floor) * wave;
     const offset = index * 3;
 
     colors[offset] = shared.base[offset] * brightness;

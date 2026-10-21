@@ -159,6 +159,17 @@ export function isTimerRunning() {
   return running;
 }
 
+/**
+ * Whether the run that just finished is the best one yet.
+ *
+ * Only meaningful after `stopTimer`, which is what banks it: before that the
+ * best is a previous run's and this is false. For the win screen, which has
+ * the one number in the game worth being proud of.
+ */
+export function isBestRun() {
+  return best !== null && best === elapsed;
+}
+
 export function resetTimer() {
   elapsed = 0;
   running = true;

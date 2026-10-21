@@ -25,7 +25,9 @@ import {
   initTimer,
   updateTimer,
   resetTimer,
+  stopTimer,
   getElapsedText,
+  isBestRun,
 } from './components/Timer.js';
 // The boost is updated from Movement.js rather than here: it burns only while
 // the sleigh is being asked to go somewhere, and that module is the one that
@@ -66,7 +68,11 @@ import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
 import { createAurora, updateAurora } from './components/Aurora.js';
-import { updateChristmasLights } from './components/ChristmasLights.js';
+import {
+  updateChristmasLights,
+  celebrate,
+  resetChristmasLights,
+} from './components/ChristmasLights.js';
 import { updateSmoke } from './components/Smoke.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
@@ -166,13 +172,24 @@ initTitleScreen({ onStart: () => restartGame() });
 
 initGameState({
   onGameOver: () => setPlayerVisible(false),
+  // The won ending. Tode is NOT hidden, unlike the lost one: he has just
+  // finished the round, and the town coming up behind him is what the screen
+  // is there to show. The clock stops here and nowhere else -- this is the
+  // call `Timer.js` has been waiting for since the fifth catch stopped
+  // standing in for an ending.
+  onWin: () => {
+    stopTimer();
+    celebrate();
+  },
   // The Game Over screen's second option. Routed through here rather than
   // imported there, like every other thing `GameState.js` does not know
   // about.
   onMainMenu: () => openTitleScreen(),
-  // What the Game Over screen prints under the reason. Handed in rather than
+  // What both ending screens print as the result. Handed in rather than
   // imported there, because `GameState.js` imports nothing -- see its header.
   getTime: getElapsedText,
+  // And whether that result is a record, which only the win screen asks.
+  isBestRun,
   onRestart: () => {
     resetMovement(player);
     // clearEnemies(scene);
@@ -183,6 +200,11 @@ initGameState({
     resetTimer();
     // A full tank, like the start of any run.
     resetBoost();
+    // Back to twinkling. The delivered presents are the easy half of a
+    // restart to remember; this is the half that will be forgotten, because
+    // nothing visibly breaks -- the second run simply starts with the town
+    // already celebrating and the ending has nothing left to give.
+    resetChristmasLights();
     setPlayerVisible(true);
   },
 });

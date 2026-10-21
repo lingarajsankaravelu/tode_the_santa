@@ -1,5 +1,5 @@
-// Owns whether a run is being played, and the screen that announces one
-// ending.
+// Owns whether a run is being played, and the two screens that announce how
+// it finished.
 //
 // Deliberately almost dependency-free: the pieces that need to freeze
 // (movement, enemies, attack, score) only ever ask this module a question, and
@@ -37,6 +37,16 @@ const BADGE_TEXT = 'GOD MODE · G to toggle';
 const OVERLAY_CLASS = 'game-over';
 const OVERLAY_TITLE = 'Game Over';
 const VISIBLE_CLASS = 'visible';
+
+// The other ending. It shares the Game Over screen's layout -- the element
+// carries both classes -- and differs in three things: it is lighter, because
+// the whole point is that the town behind it is lit; it says what happened
+// rather than what went wrong; and the first option is to play again rather
+// than to try again, which is the same key and a different sentence.
+const WIN_CLASS = 'win';
+const WIN_TITLE = 'Merry Christmas';
+const WIN_REASON = "Five presents, five doorsteps. Tode's round is finished.";
+const WIN_BEST = 'Your best yet';
 // Shown when a caller does not say why. Every caller does, but a run that ends
 // with an empty line where the reason goes is worse than a vague one.
 const DEFAULT_REASON = 'The run ended';
@@ -45,8 +55,13 @@ let overlayElement = null;
 let reasonElement = null;
 let resultElement = null;
 let overlayMenu = null;
+let winElement = null;
+let winResultElement = null;
+let winBestElement = null;
+let winMenu = null;
 let badgeElement = null;
 let gameOver = false;
+let won = false;
 // False until something starts a run. The game opens on the title screen now,
 // and the world has to hold still behind it -- without this the clock would be
 // counting, the storm would be throwing gifts, and the run would be half over
@@ -57,6 +72,10 @@ let handlers = {};
 
 function showOverlay(visible) {
   overlayElement.classList.toggle(VISIBLE_CLASS, visible);
+}
+
+function showWin(visible) {
+  winElement.classList.toggle(VISIBLE_CLASS, visible);
 }
 
 function showBadge(visible) {
@@ -75,6 +94,11 @@ export function isGodMode() {
  * as "is the player looking at the Game Over screen right now". On the title
  * screen the run is over too, and G there would launch one from a screen whose
  * only starting key should be Enter.
+ *
+ * And on `gameOver` rather than on any "is the run over" question, so that
+ * pressing G on the win screen does not silently throw a finished run away.
+ * God mode rescues you from a death; there is nothing to be rescued from
+ * after five deliveries.
  */
 export function setGodMode(enabled) {
   godMode = enabled;
@@ -83,8 +107,15 @@ export function setGodMode(enabled) {
   if (godMode && gameOver && activeMenu() === overlayMenu) restartGame();
 }
 
-export function initGameState({ onGameOver, onRestart, onMainMenu, getTime }) {
-  handlers = { onGameOver, onRestart, onMainMenu, getTime };
+export function initGameState({
+  onGameOver,
+  onWin,
+  onRestart,
+  onMainMenu,
+  getTime,
+  isBestRun,
+}) {
+  handlers = { onGameOver, onWin, onRestart, onMainMenu, getTime, isBestRun };
 
   overlayElement = document.createElement('div');
   overlayElement.className = OVERLAY_CLASS;
@@ -101,6 +132,25 @@ export function initGameState({ onGameOver, onRestart, onMainMenu, getTime }) {
   ]);
   overlayElement.appendChild(overlayMenu.element);
   document.body.appendChild(overlayElement);
+
+  winElement = document.createElement('div');
+  // Both classes: the layout, the title size and the result line are the Game
+  // Over screen's, and `.win` only changes what has to change.
+  winElement.className = `${OVERLAY_CLASS} ${WIN_CLASS}`;
+  winElement.innerHTML =
+    `<h1>${WIN_TITLE}</h1>` +
+    `<p class="reason">${WIN_REASON}</p>` +
+    '<p class="result"></p>' +
+    `<p class="best">${WIN_BEST}</p>`;
+  winResultElement = winElement.querySelector('.result');
+  winBestElement = winElement.querySelector('.best');
+
+  winMenu = createMenu([
+    { label: 'Play again', run: () => restartGame() },
+    { label: 'Main menu', run: () => leaveToMainMenu() },
+  ]);
+  winElement.appendChild(winMenu.element);
+  document.body.appendChild(winElement);
 
   badgeElement = document.createElement('div');
   badgeElement.className = BADGE_CLASS;
@@ -120,17 +170,29 @@ export function initGameState({ onGameOver, onRestart, onMainMenu, getTime }) {
  * Whether the world should be running this frame: a run has started and has
  * not ended.
  *
- * **This is the one the render loop reads.** `isGameOver()` answers a
- * different question -- which ending it was -- and a title screen is not an
- * ending. When `conclusion/win_state/spec.md` lands, winning is a third flag
- * in here and this is still the only line the loop needs.
+ * **This is the one the render loop reads**, and the only one anything
+ * outside this module should be asking in order to decide whether to run.
+ * `isGameOver()` and `isWon()` answer a different question -- which of the
+ * three states the run is in -- and if a reviewer finds either of them
+ * guarding an update, that is the bug this comment exists to prevent.
+ *
+ * `win_state/spec.md` asks for this as `isRunOver()`, the negation of three
+ * quarters of this. It is not exported under that name because there is no
+ * caller for it: a title screen is not an ending, so the loop needs the
+ * "started" half as well, and one question with one answer is better than two
+ * that have to agree.
  */
 export function isRunLive() {
-  return started && !gameOver;
+  return started && !gameOver && !won;
 }
 
 export function isGameOver() {
   return gameOver;
+}
+
+/** Which ending it was. The town is lit and the clock has stopped. */
+export function isWon() {
+  return won;
 }
 
 /**
@@ -149,10 +211,12 @@ export function triggerGameOver(reason = DEFAULT_REASON) {
   if (godMode) return;
 
   // Two systems can end the run on the same frame; only the first counts, and
-  // that includes which reason is shown. A run that has not begun cannot end
-  // either: the title screen freezes the world, and nothing should be able to
-  // leave a Game Over waiting behind it.
-  if (gameOver || !started) return;
+  // that includes which reason is shown. A won run is closed to this as well:
+  // the fifth delivery and a crash cannot both be the ending, and the one that
+  // got there first was the one that stopped the world. A run that has not
+  // begun cannot end either -- the title screen freezes the world, and nothing
+  // should be able to leave a Game Over waiting behind it.
+  if (gameOver || won || !started) return;
 
   gameOver = true;
   reasonElement.textContent = reason;
@@ -168,9 +232,36 @@ export function triggerGameOver(reason = DEFAULT_REASON) {
   handlers.onGameOver();
 }
 
+/**
+ * The run is won: five gifts caught, five houses served.
+ *
+ * **No god-mode guard, deliberately.** `triggerGameOver` opens with one,
+ * because god mode is "the run cannot end badly"; being denied the ending
+ * after delivering five presents is not that, it is a broken run.
+ *
+ * `handlers.onWin()` runs BEFORE the screen is filled in, and that order is
+ * load-bearing: it is what stops the clock and banks the time, so the two
+ * lines below are reading a result that has already been settled.
+ */
+export function triggerWin() {
+  if (won || !started) return;
+
+  won = true;
+  handlers.onWin();
+
+  winResultElement.textContent = handlers.getTime
+    ? `Time ${handlers.getTime()}`
+    : '';
+  // Shown only when it is true, which on a first finished run it always is.
+  winBestElement.style.display = handlers.isBestRun?.() ? '' : 'none';
+  showWin(true);
+  openMenu(winMenu);
+}
+
 /** Back to the title screen. The run stays over, so the world stays frozen. */
 function leaveToMainMenu() {
   showOverlay(false);
+  showWin(false);
   // Let go of the keyboard before the title screen takes it, so there is never
   // a moment where two menus would answer the same Enter.
   closeMenu();
@@ -187,6 +278,7 @@ function leaveToMainMenu() {
 export function beginRun() {
   started = true;
   gameOver = false;
+  won = false;
   closeMenu();
 }
 
@@ -194,7 +286,9 @@ export function beginRun() {
 export function restartGame() {
   started = true;
   gameOver = false;
+  won = false;
   closeMenu();
   showOverlay(false);
+  showWin(false);
   handlers.onRestart();
 }

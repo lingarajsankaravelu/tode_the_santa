@@ -121,6 +121,69 @@ body {
   opacity: 1;
 }
 
+/* The other ending. `conclusion/win_state/spec.md`: the overlay carries both
+   classes, so everything above still applies and only what has to change
+   changes.
+
+   Lighter than the Game Over screen's 0.75, because the whole point of this
+   one is that the town behind it is lit -- hiding the thing the ending is
+   made of would leave a dark box saying the town came on. The spec's 0.45,
+   with the text shadow it says to reach for first if the wording stops
+   reading at that. */
+.game-over.win {
+  background: rgba(6, 11, 24, 0.45);
+  text-shadow: 0 2px 12px rgba(6, 11, 24, 0.9);
+  /* Starts after the lights have begun climbing and lands exactly as they
+     reach full: ChristmasLights.js takes CELEBRATE_SECONDS = 1.6 to bring the
+     town up, and 0.4 + 1.2 is the same moment. The town answers first and the
+     overlay agrees with it, rather than the two arriving together and the
+     player reading the wording instead of watching the village. */
+  animation: win-in 1.2s ease 0.4s both;
+}
+
+@keyframes win-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Gold, where Game Over is white: the one place in the game where the title
+   of a screen is good news. */
+.game-over.win h1 {
+  color: #ffd964;
+}
+
+/* Brighter than on the Game Over screen, where the dimming does the work.
+   Here the bottom half of what is behind the menu is lit snow, and 0.55 white
+   over it is unreadable. The `.selected` row is listed again because the rule
+   above it would otherwise outrank the one that makes a selection look
+   selected. */
+.game-over.win .menu-item {
+  opacity: 0.78;
+}
+
+.game-over.win .menu-item.selected {
+  opacity: 1;
+}
+
+.game-over.win .menu-hint {
+  opacity: 0.72;
+}
+
+/* Under the time, and only present when the run was a record. Small, because
+   it is a remark rather than the result. */
+.game-over .best {
+  margin-top: 6px;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #ffd964;
+  opacity: 1;
+}
+
 /* The keyboard menu, shared by both screens. No hover and no cursor: these
    rows are driven by Up / Down and Enter, and a row that lights up under the
    mouse but cannot be clicked is a promise the screen does not keep. */
