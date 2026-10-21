@@ -117,9 +117,13 @@ export function initTimer() {
  * Called when the run is COMPLETE -- not when it is lost. A crash does not
  * earn a best time, so `resetTimer` throws that run away without this.
  *
- * `conclusion/win_state/spec.md` owns the real completion: `allDelivered()`,
- * once `gift_delivery` exists. Until then `main.js` calls this on the fifth
- * catch, which is the last thing the game currently has to say.
+ * `conclusion/win_state/spec.md` owns the real completion: `allDelivered()`.
+ * **Nothing calls this yet.** `Gifts.js` used to, on the fifth catch, as a
+ * placeholder for an ending the game did not have; that went out when the
+ * Game Over screen started showing the time, because a clock stopped at the
+ * end of the catching phase reported the flight to town and the five drops as
+ * free. Losing deliberately does not come through here -- a crash does not
+ * earn a best time -- so the one caller this is waiting for is the win.
  */
 export function stopTimer() {
   if (!running) return;
@@ -137,6 +141,18 @@ export function stopTimer() {
 /** The run's time, in seconds. For whatever wants to announce it. */
 export function getElapsed() {
   return elapsed;
+}
+
+/**
+ * The same time, formatted the way the readout formats it -- `1:24.6`.
+ *
+ * Exported so the Game Over screen can show the run's time without owning a
+ * second opinion about how a time is written. `GameState.js` imports nothing,
+ * so `main.js` hands this in as a callback rather than that module reaching
+ * for it.
+ */
+export function getElapsedText() {
+  return format(elapsed);
 }
 
 export function isTimerRunning() {

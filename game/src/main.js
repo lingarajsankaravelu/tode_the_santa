@@ -21,7 +21,12 @@ import { initInput, updateMovement, resetMovement } from './components/Movement.
 // The score is retired -- see Score.js's header. A game about how fast Santa
 // can collect and deliver wants a clock, not an accumulator.
 // import { initScore, updateScore, resetScore } from './components/Score.js';
-import { initTimer, updateTimer, resetTimer } from './components/Timer.js';
+import {
+  initTimer,
+  updateTimer,
+  resetTimer,
+  getElapsedText,
+} from './components/Timer.js';
 // The boost is updated from Movement.js rather than here: it burns only while
 // the sleigh is being asked to go somewhere, and that module is the one that
 // knows. All this owns is the readout's life cycle.
@@ -45,7 +50,17 @@ import {
   initGiftBeacon,
   updateGiftBeacon,
 } from './components/GiftBeacon.js';
-import { initGameState, isGameOver, setGodMode } from './components/GameState.js';
+import {
+  initGameState,
+  isRunLive,
+  setGodMode,
+  beginRun,
+  restartGame,
+} from './components/GameState.js';
+import {
+  initTitleScreen,
+  openTitleScreen,
+} from './components/TitleScreen.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
@@ -145,8 +160,19 @@ function setPlayerVisible(visible) {
   if (player.model) player.model.visible = visible;
 }
 
+// Built before `initGameState`, which hands it the "Main menu" option on the
+// Game Over screen, and shown at the bottom of this file.
+initTitleScreen({ onStart: () => restartGame() });
+
 initGameState({
   onGameOver: () => setPlayerVisible(false),
+  // The Game Over screen's second option. Routed through here rather than
+  // imported there, like every other thing `GameState.js` does not know
+  // about.
+  onMainMenu: () => openTitleScreen(),
+  // What the Game Over screen prints under the reason. Handed in rather than
+  // imported there, because `GameState.js` imports nothing -- see its header.
+  getTime: getElapsedText,
   onRestart: () => {
     resetMovement(player);
     // clearEnemies(scene);
@@ -167,7 +193,15 @@ initGameState({
 // hazard being paid for twice. Switched on from here rather than inside
 // `GameState.js`, which imports nothing and must not learn what a gift is;
 // after `initGameState`, because the badge it shows is created there.
-if (isCatchSkipped()) setGodMode(true);
+if (isCatchSkipped()) {
+  setGodMode(true);
+  // Straight past the title screen: the point of the shortcut is to be in the
+  // air with five gifts, and `beginRun` rather than `restartGame` because
+  // there is nothing to reset at boot and the models are not in yet.
+  beginRun();
+} else {
+  openTitleScreen();
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -179,8 +213,11 @@ window.addEventListener('resize', () => {
 updateDifficulty();
 
 renderer.setAnimationLoop(() => {
-  // Everything that moves or counts stands still once the run is over.
-  if (!isGameOver()) {
+  // Everything that moves or counts stands still unless a run is being
+  // played -- which is not the same question as "is it over". The title
+  // screen is up before the first run and between runs, and the world has to
+  // hold still behind it too.
+  if (isRunLive()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
     // `houses` is live again, and fatal: below the ridge, flying into one ends

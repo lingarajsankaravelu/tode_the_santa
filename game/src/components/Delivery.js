@@ -23,7 +23,7 @@ import { setSackFull } from './Player.js';
 import { groundHeightAt } from './Terrain.js';
 import { MAX_ALTITUDE, sleighVelocity } from './Movement.js';
 import { play } from './Sound.js';
-import { isGameOver, triggerGameOver } from './GameState.js';
+import { isRunLive, triggerGameOver } from './GameState.js';
 
 // Where a gift has to land: a point on the ground, on the house's own angle,
 // at a fixed radius from the origin.
@@ -399,14 +399,14 @@ export function initDeliveryInput() {
   window.addEventListener('keydown', (event) => {
     if (event.code !== DROP_KEY || event.repeat) return;
 
-    // Stands down once the run is over, which is when `GameState.js` claims
-    // the same key to restart. `updateDelivery` is not being called then
+    // Stands down whenever a run is not being played -- the Game Over screen
+    // and the title screen, both of which answer Space themselves (it is a
+    // confirm alias on every menu). `updateDelivery` is not being called then
     // either, so this is not what stops the drop -- it stops the latch below
-    // being set and then consumed on the first frame of the NEXT run, which
-    // would otherwise depend on this listener having been registered before
-    // GameState's. `resetDelivery` clears it as well; this makes it not
-    // happen rather than undoing it afterwards.
-    if (isGameOver()) return;
+    // being set and then consumed on the first frame of the NEXT run.
+    // `resetDelivery` clears it as well; this makes it not happen rather than
+    // undoing it afterwards.
+    if (!isRunLive()) return;
 
     event.preventDefault();
     dropRequested = true;

@@ -266,7 +266,7 @@ export function createAurora() {
 /**
  * Advances the curtain one frame.
  *
- * Called outside main.js's `isGameOver()` guard, the same way the snow, the
+ * Called outside main.js's `isRunLive()` guard, the same way the snow, the
  * lights and the smoke are: the sky does not stop because the run ended, and a
  * band of aurora freezing on the Game Over frame would read as part of the
  * failure. There is nothing to reset on a restart -- the only state is this
