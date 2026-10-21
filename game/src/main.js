@@ -82,6 +82,7 @@ import {
 import { updateSmoke } from './components/Smoke.js';
 import { updateAirstrip } from './components/Airstrip.js';
 import { initMusic } from './components/Music.js';
+import { initSound } from './components/Sound.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
 import { createLighting } from './components/Lighting.js';
 import { updateAnimations } from './components/Animation.js';
@@ -165,6 +166,10 @@ initGiftBeacon();
 // Nothing to update per frame: the element loops itself, and it carries on
 // across a Game Over the same way the snow and the lights do.
 initMusic();
+// 18 KB of cue samples, fetched and decoded now so the first catch of the run
+// is not the download of its own sound. Optional -- `play` loads on demand --
+// so nothing below depends on it having finished.
+initSound();
 
 // Hiding the model rather than the group: the camera is a child of the group,
 // and there is no need to find out how a renderer feels about an invisible
