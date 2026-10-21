@@ -22,6 +22,10 @@ import { initInput, updateMovement, resetMovement } from './components/Movement.
 // can collect and deliver wants a clock, not an accumulator.
 // import { initScore, updateScore, resetScore } from './components/Score.js';
 import { initTimer, updateTimer, resetTimer } from './components/Timer.js';
+// The boost is updated from Movement.js rather than here: it burns only while
+// the sleigh is being asked to go somewhere, and that module is the one that
+// knows. All this owns is the readout's life cycle.
+import { initBoost, resetBoost } from './components/Boost.js';
 import { initGifts, updateGifts, resetGifts, gifts } from './components/Gifts.js';
 import {
   createGiftBeacon,
@@ -94,6 +98,8 @@ initCameraControls(renderer.domElement);
 // initAttackInput();
 // initScore();
 initTimer();
+// Creates the tank's bar and binds Shift.
+initBoost();
 // Creates the counter and starts a_gift_box.glb loading. The gifts only begin
 // appearing once both that and the sleigh are in.
 initGifts();
@@ -117,6 +123,8 @@ initGameState({
     resetGifts(scene, player);
     // resetScore();
     resetTimer();
+    // A full tank, like the start of any run.
+    resetBoost();
     setPlayerVisible(true);
   },
 });

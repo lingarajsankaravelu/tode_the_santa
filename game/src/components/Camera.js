@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { boostThrust } from './Boost.js';
 
 // 45, not 30. The frustum has to reach the scenery: at 30 degrees, pitched
 // down onto Tode, the top edge of the view sat 20 degrees BELOW horizontal
@@ -52,8 +53,22 @@ const PITCH_DIRECTION = 1;
 
 const HINT_CLASS = 'mouse-hint';
 const HINT_TEXT =
-  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Esc to release';
+  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Shift to boost \u00b7 Esc to release';
 const VISIBLE_CLASS = 'visible';
+
+// How much wider the lens goes at full boost, in degrees. Five, which is a
+// ninth of the field -- small enough that nobody reads it as the camera doing
+// something, large enough that the scenery visibly stretches past the edges.
+// This is the cheapest speed cue there is and it costs one projection matrix a
+// frame while the boost is lit.
+const BOOST_FOV = 5;
+
+// What the lens is currently set to, so the matrix is only rebuilt when the
+// number actually moves. Rounded to a hundredth of a degree before comparing:
+// the eased thrust in Boost.js approaches zero asymptotically and never
+// reaches it, so an exact comparison would rebuild the matrix forever after
+// every boost.
+let renderedFov = null;
 
 let yaw = DEFAULT_YAW;
 let pitch = DEFAULT_PITCH;
@@ -136,4 +151,14 @@ export function updateCamera(camera, player) {
   // Aimed at his feet, which is where the old fixed rig's one-off lookAt
   // pointed, so he sits in the frame where he always did.
   camera.lookAt(player.position.x, player.position.y, player.position.z);
+
+  const fov = Math.round((FIELD_OF_VIEW + BOOST_FOV * boostThrust()) * 100) / 100;
+
+  if (fov !== renderedFov) {
+    renderedFov = fov;
+    camera.fov = fov;
+    // The resize handler in main.js does the same after changing the aspect.
+    // Both are needed: the matrix is not rebuilt from a field assignment.
+    camera.updateProjectionMatrix();
+  }
 }

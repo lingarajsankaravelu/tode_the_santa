@@ -22,6 +22,7 @@ import { isPositionFree } from './Collision.js';
 import { getCameraYaw } from './Camera.js';
 import { isGameOver, isGodMode, triggerGameOver } from './GameState.js';
 import { crashFloorAt, isLandableAt, landingSurfaceAt } from './Terrain.js';
+import { updateBoost, boostThrust, BOOST_MULTIPLIER } from './Boost.js';
 
 // How far from the origin the sleigh may get, horizontally. **Up from 700,
 // which was never a game-design number**: it was the radius of the
@@ -58,6 +59,14 @@ const CRUISE_SPEED = 200;
 // vehicle rather than a cursor, little enough that catching a gift is not a
 // planning exercise.
 const ACCELERATION = 420;
+// What the boost does to both of the two numbers above. Shift raises the top
+// speed AND the shove that gets there -- a boost that lifted the ceiling
+// without lifting the acceleration would take over two seconds to show up,
+// which is most of the tank spent before anything happened.
+//
+// `Boost.js` owns the multiplier, the tank it comes out of and the key; this
+// file only blends between cruise and boosted along `boostThrust()`.
+const BOOST_ACCELERATION_MULTIPLIER = 2.1;
 // Coasts to a near stop in about a second and a half once the keys go.
 const DRAG = 2.2;
 // The same curve on the ground, and much weaker: the sleigh is on runners, and
@@ -136,19 +145,23 @@ const MOVE_KEYS = {
 // is looking.
 //
 // Q and E are the documented pair -- they sit next to WASD, so a hand already
-// on the movement keys can change height without leaving them. Space and
-// Shift are kept as aliases for anyone who reaches for them first.
+// on the movement keys can change height without leaving them. Space is kept
+// as an alias for anyone who reaches for it first.
 //
 // Space being here is temporary. `core_loop/gift_delivery/spec.md` wants it
 // for the drop and `GameState.js` claims it for restart, and now that Q and E
 // exist nothing is lost by unbinding it. Left in until one of those two
 // actually needs it.
+//
+// **Shift used to descend here, and now boosts instead.** It was only ever an
+// alias -- E has done the job since the flight model landed, and the mouse
+// hint has never advertised anything but Q and E -- and hold-Shift-to-go-fast
+// is the one binding a player is most likely to try without being told. See
+// `Boost.js`.
 const CLIMB_KEYS = {
   KeyQ: 1,
   KeyE: -1,
   Space: 1,
-  ShiftLeft: -1,
-  ShiftRight: -1,
 };
 
 // Which keys are down right now. A set rather than the hop's queue: flight is
@@ -323,15 +336,30 @@ function climbInput() {
  * killing the component that points out of it.
  */
 function moveHorizontally(player, direction, delta, obstacles) {
-  if (direction) {
-    velocity.x += direction.x * ACCELERATION * delta;
-    velocity.y += direction.y * ACCELERATION * delta;
+  // 0 at cruise, 1 at full boost, and smoothed -- so the ceiling and the shove
+  // both ramp up and back down rather than switching with the key. Releasing
+  // Shift above cruise is what the clamp below reads as a gentle thing: the
+  // top speed comes down over a few tenths and the excess is shed against it,
+  // instead of the sleigh being yanked back to 200 on one frame.
+  const thrust = boostThrust();
+  const topSpeed = CRUISE_SPEED * (1 + (BOOST_MULTIPLIER - 1) * thrust);
+  const acceleration = ACCELERATION * (1 + (BOOST_ACCELERATION_MULTIPLIER - 1) * thrust);
 
-    if (velocity.length() > CRUISE_SPEED) velocity.setLength(CRUISE_SPEED);
+  if (direction) {
+    velocity.x += direction.x * acceleration * delta;
+    velocity.y += direction.y * acceleration * delta;
+
+    if (velocity.length() > topSpeed) velocity.setLength(topSpeed);
   } else {
     // Exponential rather than `velocity *= 1 - DRAG * delta`, which is the
     // same curve at 60Hz and goes negative on a long frame.
     velocity.multiplyScalar(Math.exp(-(grounded ? SLIDE_DRAG : DRAG) * delta));
+
+    // Boosted speed is shed against the falling ceiling here too, not only
+    // under power. On the snow SLIDE_DRAG is 0.5 -- a six-second glide -- and
+    // without this a boosted landing would keep its boosted speed for most of
+    // it with the tank long since empty.
+    if (velocity.length() > topSpeed) velocity.setLength(topSpeed);
   }
 
   let x = player.position.x + velocity.x * delta;
@@ -454,6 +482,12 @@ export function updateMovement(player, enemies = [], obstacles = []) {
 
   const direction = desiredDirection();
 
+  // Before `moveHorizontally`, so the thrust it reads is this frame's rather
+  // than last frame's. The boost only burns while the sleigh is being asked
+  // to go somewhere -- see `updateBoost` -- which is why the direction is
+  // handed over rather than looked up there.
+  updateBoost(delta, direction !== null);
+
   moveHorizontally(player, direction, delta, obstacles);
 
   // That call can end the run. Everything below writes to the sleigh, and a
@@ -508,7 +542,12 @@ export function updateMovement(player, enemies = [], obstacles = []) {
   // sprint on the spot whenever it stops. They slow as it slows and settle
   // when it settles, which is the nearest this asset gets to a standing pose:
   // there is no second clip to cut to.
-  player.animator?.setTimeScale(Math.min(velocity.length() / CRUISE_SPEED, 1));
+  // Divided by cruise and capped at the boost multiplier rather than at 1, so
+  // the four pullers visibly dig in under boost instead of saturating at
+  // cruise and leaving the push with no animation behind it.
+  player.animator?.setTimeScale(
+    Math.min(velocity.length() / CRUISE_SPEED, BOOST_MULTIPLIER),
+  );
 }
 
 // Read by Player.js so a run starts where resetMovement puts it back, and by

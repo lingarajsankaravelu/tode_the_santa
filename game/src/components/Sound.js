@@ -1,4 +1,4 @@
-// The two sound effects: a gift caught, and a gift delivered.
+// The sound effects: a gift caught, a gift delivered, and the boost lighting.
 //
 // Synthesised rather than loaded. There is one audio file in the project, a
 // 2.2 MB WAV theme, and two more for a 90ms blip apiece would be most of a
@@ -23,9 +23,10 @@ import { isMuted } from './Music.js';
  *
  * - `from` / `to`: the sweep, in Hz. Rising reads as a gain, falling as a
  *   release -- which is the whole distinction between the two cues below.
- * - `seconds`: total length. Both are under a fifth of a second; a reward
- *   sound the player hears five times a run must not outstay its welcome.
- * - `type`: the oscillator. `triangle` is a soft bell, `sine` a soft thud.
+ * - `seconds`: total length. None is over a fifth of a second; a cue the
+ *   player hears several times a run must not outstay its welcome.
+ * - `type`: the oscillator. `triangle` is a soft bell, `sine` a soft thud,
+ *   `sawtooth` a rasp.
  * - `gain`: peak, well under 1 so two cues overlapping cannot clip.
  */
 const CUES = {
@@ -36,6 +37,13 @@ const CUES = {
   // Lower and falling: something set down rather than picked up. Longer than
   // the catch, because a delivery is the heavier of the two events.
   deliver: { from: 440, to: 220, seconds: 0.14, type: 'sine', gain: 0.26 },
+  // The boost lighting. Low, rising and rough: a sawtooth is the harshest
+  // waveform here on purpose, because this is the one cue that is a machine
+  // doing something rather than a reward being handed over. Quieter than
+  // either of the others despite being longer -- it fires whenever the player
+  // reaches for speed, which is far more often than five times a run, and a
+  // cue heard that often has to sit under the music rather than on top of it.
+  boost: { from: 150, to: 520, seconds: 0.2, type: 'sawtooth', gain: 0.12 },
 };
 
 // Created on the first cue rather than at init. A context built before the

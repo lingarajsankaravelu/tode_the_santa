@@ -28,6 +28,7 @@ import { houses } from './House.js';
 import { stopTimer } from './Timer.js';
 import { play } from './Sound.js';
 import { createParachute, updateParachute } from './Parachute.js';
+import { refillBoost } from './Boost.js';
 
 const MODEL_PATH = '/models/a_gift_box.glb';
 // The file is 225 x 293.29 x 225 in its own units with Y up, so this makes a
@@ -313,6 +314,12 @@ function onCatch(scene, gift, player) {
   renderCount();
 
   play('catch');
+
+  // Half a tank back. This is the exchange the boost exists for: the gift just
+  // caught pays for the sprint to the next one, so spending the tank on the
+  // way in is the fast line rather than a risk. `Boost.js`'s header has the
+  // rest of the reasoning.
+  refillBoost();
 
   // The line the appearance spec has been waiting for. The smile was wired to
   // a monster kill and lost its trigger when the monsters left; catching a

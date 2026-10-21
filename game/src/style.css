@@ -47,12 +47,21 @@ body {
 }
 
 .best-time {
-  /* Under the gift count, third in the centre column. Smaller and dimmer than
-     the live clock: it is the thing being chased, not the thing happening. */
+  /* **Top of the bottom-left stack, not the centre column.** It sat under the
+     clock through two layouts on the grounds that the clock and the record
+     belong together, and that was wrong for the same reason the gift count
+     was: the centre of the screen is where the sleigh is and where a gift
+     falls past it, and the best time is the one readout a player never needs
+     mid-flight. It is a number from a previous run. It joins the corner block
+     -- record, objective, fuel -- and the centre column is now the live clock
+     alone.
+
+     Smaller and dimmer than that clock, as before: it is the thing being
+     chased, not the thing happening. */
   position: fixed;
-  top: 92px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Clears the gift count pill at 52px and its own line height. */
+  bottom: 94px;
+  left: 20px;
   font-family: system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   font-size: 14px;
@@ -168,16 +177,22 @@ body {
 }
 
 .gift-count {
-  /* Top centre, under the score, which sits at 16px and is 32px tall. With the
-     monsters gone the score is a survival timer and little else; the gift
-     count is the readout that matters now and belongs beside it. Styled as the
-     .god-mode and .music-muted badges are -- same pill, same family, same
-     letter-spacing -- but at a readable size rather than their 12px: those two
-     are passive status, this one is the objective. */
+  /* **Bottom left, with the boost gauge under it.** It used to sit at top
+     centre directly under the clock, which stacked four readouts -- clock,
+     count, best, boost -- into one column in the middle of the screen, right
+     where the sleigh is and right where a gift falls past it. The two readouts
+     the player glances at rather than reads are now a corner block out of the
+     flight path -- and the best time went the same way, so the centre column
+     is the live clock and nothing else.
+
+     Styled as the .god-mode and .music-muted badges are -- same pill, same
+     family, same letter-spacing -- but at a readable size rather than their
+     12px: those two are passive status, this one is the objective. */
   position: fixed;
-  top: 58px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Clears the boost row below it: 20px margin, the row's own height, and a
+     gap. */
+  bottom: 52px;
+  left: 20px;
   padding: 6px 10px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.55);
@@ -264,4 +279,73 @@ body {
   /* Like every other readout: the canvas needs its clicks for pointer lock. */
   pointer-events: none;
   user-select: none;
+}
+
+.boost-bar {
+  /* Bottom left, under the gift count -- see the note there for why neither of
+     these is in the centre column any more. A row rather than a bar: the
+     rocket sits to the left of the track so the gauge needs no label, and the
+     two line up on their centres whatever the font does to the glyph. */
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.boost-bar-icon {
+  /* Sized to the gift count's 20px rather than to the 6px track: it is the
+     label, and a 6px-tall rocket is a smudge. Dimmed slightly so it reads as
+     an icon beside the gauge and not as a thing happening. */
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.9;
+  /* Emoji ignore `color`, so the only way to dim one with the empty tank below
+     is opacity -- which is what `.spent` reaches for. */
+  filter: drop-shadow(0 0 6px rgba(255, 209, 102, 0.5));
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.boost-bar-track {
+  /* Thin and short on purpose: it is a fuel gauge glanced at between gifts,
+     not a thing to fly by. The player feels the boost; this only answers "is
+     there any left". */
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.boost-bar-fill {
+  /* Gold, which is the sleigh's own colour -- the lanterns on it kept the gold
+     the landing ring gave up when it went Christmas red. The ring is the gift
+     and the strobe is the gift; this is the sleigh, so it is lit like one.
+
+     The width is written by the JS every time it changes by a whole percent,
+     and the transition smooths over the gap between those writes rather than
+     animating the drain: the drain is already a frame-by-frame number. */
+  width: 100%;
+  height: 100%;
+  background: #ffd166;
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.6);
+  transition: width 0.08s linear, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.boost-bar.spent .boost-bar-fill {
+  /* Below the minimum the boost will not light, so the gauge says so rather
+     than showing a sliver of gold that does nothing when pressed. Dim and
+     colourless: there is nothing in there to spend. */
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+}
+
+.boost-bar.spent .boost-bar-icon {
+  /* The rocket goes out with the fill, so the corner reads as spent at a
+     glance without having to judge the length of a 120px bar. */
+  opacity: 0.35;
+  filter: none;
 }

@@ -1,5 +1,33 @@
 ### Specification for AI agent: The sleigh, and flight
 
+> **Amended after play: the sleigh has a boost, and `Shift` is it.**
+> `Boost.js`, the readout under the clock, and five call sites.
+>
+> The flight model below has exactly one speed, and the clock in `Timer.js` is
+> the score — so the minute a run spends crossing open country to a gift that
+> spawned 700 units away on a fresh bearing is dead time being charged to the
+> player. Hold `Shift` for **1.8× cruise** (360 units/sec) with **2.1× the
+> acceleration**, which is worth about two extra seconds of cruise on a full
+> tank.
+>
+> **The tank is the mechanic, not the speed.** It holds 2.2 seconds of thrust.
+> It refills in 9 seconds if the key is left alone — and by **half a tank the
+> instant a gift is caught**, so a present in the sack pays for the chase to
+> the next one and the fast line through a run is to spend the tank getting
+> there. Holding `Shift` on a dry tank refills nothing: letting go is the
+> price, which is what stops the whole thing degenerating into a stutter.
+> Below 15% the boost will not light at all and the gauge greys out to say so.
+>
+> **This took `Shift` off the descent**, where it was only ever an alias — `E`
+> has done the job since this spec shipped, and the mouse hint never
+> advertised anything else. `Q`/`E` are unchanged.
+>
+> The push is readable without the gauge: the lens widens by 5°, and the four
+> pullers' animation rate is no longer capped at cruise, so they dig in.
+> Nothing about landing, collision or the world bound changes — and boosting
+> low over the town is exactly as fatal as flying into it slowly, which is the
+> risk the speed is paid for with.
+
 > **Extended, after shipping, and this spec's landing survived it.** The world
 > opened up: `WORLD_RADIUS` went from 700 to 1600, `MAX_ALTITUDE` from 400 to
 > 900, and `Terrain.js` can now answer where the ground is anywhere on the map
