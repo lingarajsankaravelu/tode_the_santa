@@ -923,3 +923,151 @@ body.free-roaming .best-time,
 body.free-roaming .gift-count {
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Controls -- `hackathon/menu/controls/spec.md`.
+
+   A panel over the title screen: the storm and Tode carry on behind a scrim,
+   so this reads as something opening on the menu rather than a second screen
+   the player has been moved to.
+   --------------------------------------------------------------------------- */
+.controls-screen {
+  /* Kept in the DOM and toggled, like every other screen here. One step above
+     the title screen's 20, which is the only other z-index in the file. */
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  /* Dark enough to read 14px type over the tumbling gifts, light enough that
+     the screen behind is still clearly there. */
+  background: rgba(6, 11, 24, 0.82);
+  font-family: system-ui, sans-serif;
+  color: #ffffff;
+  user-select: none;
+}
+
+.controls-screen.visible {
+  display: flex;
+}
+
+.controls-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(760px, 100%);
+  /* The list is long, and a short laptop window is the common case: the panel
+     is capped at the viewport and the rows scroll inside it rather than the
+     Back option sliding off the bottom. */
+  max-height: 100%;
+  padding: 22px 28px 26px;
+  border: 1px solid rgba(255, 217, 100, 0.25);
+  border-radius: 10px;
+  background: rgba(9, 16, 34, 0.9);
+  text-align: center;
+}
+
+.controls-panel h2 {
+  margin: 0;
+  font-size: 34px;
+  letter-spacing: 3px;
+  color: #ffd964;
+}
+
+.controls-blurb {
+  margin: 6px 0 0;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
+}
+
+.controls-list {
+  /* The scrolling part, so the heading and the Back option stay put. */
+  width: 100%;
+  margin-top: 18px;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.controls-group + .controls-group {
+  margin-top: 16px;
+}
+
+.controls-group h3 {
+  margin: 0 0 6px;
+  /* Smaller than the rows it heads and in the aurora's green, which is the
+     one palette colour not already spoken for by a gift or a warning. These
+     are signposts through the list, not things to be read one by one. */
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #3cf0a0;
+}
+
+.controls-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.controls-keys {
+  /* A fixed gutter, so every description starts on the same line down the
+     page however wide its key cap is. */
+  flex: 0 0 150px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.controls-key {
+  /* A key cap: the one place in the game that draws a keyboard. Gold like
+     every other "press this" cue -- the delivery hint, free roam's way out. */
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 217, 100, 0.45);
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  background: rgba(255, 217, 100, 0.08);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffd964;
+  white-space: nowrap;
+}
+
+.controls-or {
+  font-size: 11px;
+  letter-spacing: 1px;
+  opacity: 0.5;
+}
+
+.controls-text {
+  font-size: 15px;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+/* Listed alongside the other two screens for the same reason they are: the
+   panel's own `p` rules outrank a bare `.menu-hint`. */
+.controls-panel .menu-hint {
+  margin-top: 18px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  opacity: 0.5;
+}
+
+.controls-panel .menu {
+  margin-top: 14px;
+}
+
+.controls-panel .menu-item {
+  /* Narrower than the title screen's 26px rows: this is one option on a
+     screen whose job is the list above it. */
+  font-size: 20px;
+}

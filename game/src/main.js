@@ -68,6 +68,7 @@ import {
   initTitleScreen,
   openTitleScreen,
 } from './components/TitleScreen.js';
+import { initControls } from './components/Controls.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
@@ -208,6 +209,13 @@ initTitleScreen({
 
 initFreeRoam({
   onEnter: resetWorld,
+  onExit: () => openTitleScreen(),
+});
+
+// `hackathon/menu/controls/spec.md`. Opened from the title screen itself; all
+// that is wired from here is the way back, for the same reason free roam's is
+// -- `Controls.js` must not import the screen that imports it.
+initControls({
   onExit: () => openTitleScreen(),
 });
 

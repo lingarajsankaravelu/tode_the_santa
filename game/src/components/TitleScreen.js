@@ -27,6 +27,7 @@
 // it belongs in front of this screen rather than inside it. What is here is
 // the still it would settle into, which is the half the spec draws.
 import { createMenu, openMenu } from './Menu.js';
+import { openControls } from './Controls.js';
 
 const SCREEN_CLASS = 'title-screen';
 const VISIBLE_CLASS = 'visible';
@@ -184,6 +185,10 @@ export function initTitleScreen({ onStart, onFreeRoam }) {
     // `hackathon/menu/free_roam/spec.md`. Second, not first: the run is what
     // the game is, and a sightseeing flight is the thing you choose instead.
     { label: 'Free Roam', run: () => leave(handlers.onFreeRoam) },
+    // `hackathon/menu/controls/spec.md`. Last, and it does not go through
+    // `leave`: the Controls screen opens OVER this one and hands the keyboard
+    // straight back when it closes, so there is nothing here to take down.
+    { label: 'Controls', run: () => openControls() },
   ]);
   centre.appendChild(menu.element);
   screenElement.appendChild(centre);
