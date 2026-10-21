@@ -349,3 +349,48 @@ body {
   opacity: 0.35;
   filter: none;
 }
+
+.delivery-hint {
+  /* Bottom centre, in the `.mouse-hint` pill -- same padding, same radius,
+     same background, same letter-spacing -- because it is the same kind of
+     thing: an instruction to act on, not a status to glance at. It sits one
+     row ABOVE that hint rather than in the badge column top-left, and above
+     rather than on it so the two can be up at once: Escape hands the mouse
+     back mid-delivery and shows the click hint, and neither message should be
+     the one that gets covered.
+
+     In the doorstep discs' gold, which is also the Game Over reason line's,
+     so the key and the circles on the snow read as one cue. */
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #ffd964;
+  user-select: none;
+  /* Like every other readout: the canvas needs its clicks for pointer lock. */
+  pointer-events: none;
+}
+
+.delivery-hint.visible {
+  display: block;
+  /* Fades up rather than snapping on. It appears on the frame the fifth gift
+     is caught, which is already a busy one -- a chime, a smile, the sack
+     filling and five discs lighting up on the snow -- and a line of text
+     arriving instantly in the middle of that is the one of the five that reads
+     as a glitch. `display` cannot be transitioned, which is why the animation
+     is here and not a transition on the rule above. */
+  animation: delivery-hint-in 0.4s ease both;
+}
+
+@keyframes delivery-hint-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

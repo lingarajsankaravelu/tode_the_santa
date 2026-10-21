@@ -97,7 +97,7 @@ const PITCH_DIRECTION = 1;
 
 const HINT_CLASS = 'mouse-hint';
 const HINT_TEXT =
-  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Shift to boost \u00b7 C for view \u00b7 Esc to release';
+  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Shift to boost \u00b7 Space to drop a gift \u00b7 C for view \u00b7 Esc to release';
 const VISIBLE_CLASS = 'visible';
 
 // How much wider the lens goes at full boost, in degrees. Five, which is a

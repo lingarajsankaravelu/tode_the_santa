@@ -26,13 +26,26 @@ import { initTimer, updateTimer, resetTimer } from './components/Timer.js';
 // the sleigh is being asked to go somewhere, and that module is the one that
 // knows. All this owns is the readout's life cycle.
 import { initBoost, resetBoost } from './components/Boost.js';
-import { initGifts, updateGifts, resetGifts, gifts } from './components/Gifts.js';
+import {
+  initGifts,
+  updateGifts,
+  resetGifts,
+  gifts,
+  allCaught,
+  isCatchSkipped,
+} from './components/Gifts.js';
+import {
+  initDeliveryInput,
+  updateDelivery,
+  resetDelivery,
+  createDoorstepMarkers,
+} from './components/Delivery.js';
 import {
   createGiftBeacon,
   initGiftBeacon,
   updateGiftBeacon,
 } from './components/GiftBeacon.js';
-import { initGameState, isGameOver } from './components/GameState.js';
+import { initGameState, isGameOver, setGodMode } from './components/GameState.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
@@ -97,6 +110,11 @@ scene.add(aurora);
 // is. Added after the player only because it is updated against him.
 scene.add(createGiftBeacon());
 
+// The five marked doorsteps, next to the beacon and on the scene for the same
+// reason: they stand on the ground at a fixed point of the town, and the map
+// group is where the town itself lives. Hidden until the sack is full.
+scene.add(createDoorstepMarkers());
+
 const renderer = createRenderer();
 
 initInput();
@@ -111,6 +129,10 @@ initBoost();
 // Creates the counter and starts a_gift_box.glb loading. The gifts only begin
 // appearing once both that and the sleigh are in.
 initGifts();
+// Binds Space, which `Movement.js` has just given up. Nothing else to set up:
+// the gifts it drops are clones of the template `initGifts` is loading, and
+// the counter it writes to is the one `initGifts` creates.
+initDeliveryInput();
 initGiftBeacon();
 // Nothing to update per frame: the element loops itself, and it carries on
 // across a Game Over the same way the snow and the lights do.
@@ -129,6 +151,8 @@ initGameState({
     resetMovement(player);
     // clearEnemies(scene);
     resetGifts(scene, player);
+    // Every gift in the air, lying in the snow, and standing at a door.
+    resetDelivery(scene);
     // resetScore();
     resetTimer();
     // A full tank, like the start of any run.
@@ -136,6 +160,14 @@ initGameState({
     setPlayerVisible(true);
   },
 });
+
+// `?deliver` opens the run in the delivery phase, and brings god mode with it:
+// the point of the shortcut is to fly to town and drop five presents, and a
+// roof or a stand of trees ending that on the way in is the catching phase's
+// hazard being paid for twice. Switched on from here rather than inside
+// `GameState.js`, which imports nothing and must not learn what a gift is;
+// after `initGameState`, because the badge it shows is created there.
+if (isCatchSkipped()) setGodMode(true);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -163,6 +195,13 @@ renderer.setAnimationLoop(() => {
     // the air at a time -- and undefined between them, which the beacon reads
     // as nothing to point at.
     updateGiftBeacon(gifts[0] ?? null, player);
+    // The second phase, gated on the first finishing and on nothing else.
+    // Three phases that run strictly in order, each gated on the previous
+    // one's predicate, are a condition in the render loop rather than a phase
+    // machine -- a machine earns its place when a phase can be re-entered or
+    // skipped, and none of these can. The third, winning, is
+    // `conclusion/win_state/spec.md`.
+    if (allCaught()) updateDelivery(scene, player);
     // updateEnemies(scene, player, houses);
     // updateScore();
     updateTimer();
