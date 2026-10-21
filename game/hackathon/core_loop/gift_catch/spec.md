@@ -94,7 +94,7 @@ Math.hypot(gift.x - player.x, gift.y - player.y, gift.z - player.z) < CATCH_RADI
 
 | Constant | Value | Why |
 |---|---|---|
-| `CATCH_RADIUS` | `34` | The sleigh is 45 long and 16.2 wide, so its own half-extent is 22.5 at the nose; the gift is about 5.5. That leaves roughly 6 units of slack — generous enough that a near miss at 200 units/sec still counts, tight enough that you have to aim. |
+| `CATCH_RADIUS` | `49` | **Revised.** This was 34, from a sleigh 45 long with a half-extent of 22.5 at the nose. `MODEL_SCALE` is 16 now and the sleigh is 74.2 long, so the nose reaches 37.1; the gift is about 5.5, and 49 keeps the same ~6 units of slack the original figure was chosen for. Generous enough that a near miss at 200 units/sec still counts, tight enough that you have to aim. |
 
 Do not add an altitude term to `Collision.js` for this. That module is for
 things standing on the ground, and the delivery phase will still want it that
@@ -150,10 +150,17 @@ to the houses and drop a present over each, which is `gift_delivery`.
 
 Two notes for whoever writes that one:
 
-- `christmas_gift_sack.glb` and `empty_christmas_sack.glb` are **the same size
-  to within 3%** — 2.34 × 2.36 × 2.57 against 2.34 × 2.29 × 2.57 — so
-  full-to-empty is a straight model swap at the same scale and position, with
-  no refitting. The obvious moment for it is the fifth catch.
+- `christmas_gift_sack.glb` is **2.2821 × 2.2818 × 2.2883** and
+  `empty_christmas_sack.glb` is **1.5647 × 1.7185 × 1.5298**, both in their
+  own units. **An earlier draft of this spec said they matched to within 3%,
+  at 2.34 × 2.36 × 2.57 against 2.34 × 2.29 × 2.57. That was wrong** — those
+  were raw accessor numbers, the exact lie `game_story.md` warns about on
+  multi-node models. The full sack is 46% wider and 33% taller than the empty
+  one. That is not a problem and is arguably right, since a full sack should
+  look full, but it does mean the swap is **not** a visibility toggle at one
+  transform: the replacement has to be re-stood on the carriage floor by its
+  own box, the way `Player.js` already stands the empty one.
+  The obvious moment for the swap is the fifth catch.
 - Delivery is the one phase that has to care about the ground again, since a
   present has to end up at a house. `MIN_ALTITUDE = 100` means the sleigh
   cannot descend to place one, so it is a drop — which is also the only thing

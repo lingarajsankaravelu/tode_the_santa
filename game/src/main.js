@@ -114,9 +114,10 @@ renderer.setAnimationLoop(() => {
   if (!isGameOver()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
-    // Empty where `enemies` used to go. The parameter stays rather than being
-    // dropped from the signature, so putting the monsters back is a one-word
-    // change here instead of a change to Movement.js as well.
+    // Both lists are ignored now that movement is flight: nothing collides
+    // with anything above MIN_ALTITUDE. They stay in the call rather than
+    // being dropped from the signature, so a collision term is a change to
+    // Movement.js alone.
     updateMovement(player, [], houses);
     // updateEnemies(scene, player, houses);
     updateScore();

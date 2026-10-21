@@ -105,10 +105,21 @@ Three consequences, all of which fall out of the same rule:
   `MODEL_SCALE = 0.038`, resting on the ground — so centre it about 5.6 above
   the ground plane rather than at zero.
 - **The sack swaps.** `christmas_gift_sack.glb` while any gift remains in
-  hand, `empty_christmas_sack.glb` once the last one is out. The two are the
-  same size to within 3% — 2.34 × 2.36 × 2.57 against 2.34 × 2.29 × 2.57 — so
-  this is a visibility toggle between two models at one transform, not a
-  refit. Load both at startup and show one.
+  hand, `empty_christmas_sack.glb` once the last one is out. Load both at
+  startup and show one. `Player.js` already loads the empty one, rides it in
+  the carriage behind Tode at `SACK_SCALE = 4.4`, and exposes it as
+  `player.sack`.
+
+  `christmas_gift_sack.glb` is **2.2821 × 2.2818 × 2.2883** and
+  `empty_christmas_sack.glb` is **1.5647 × 1.7185 × 1.5298**, both in their
+  own units. **An earlier draft of this spec said they matched to within 3%,
+  at 2.34 × 2.36 × 2.57 against 2.34 × 2.29 × 2.57. That was wrong** — those
+  were raw accessor numbers, the exact lie `game_story.md` warns about on
+  multi-node models. The full sack is 46% wider and 33% taller than the empty
+  one. That is not a problem and is arguably right, since a full sack should
+  look full, but it does mean the swap is **not** a visibility toggle at one
+  transform: the replacement has to be re-stood on the carriage floor by its
+  own box, the way `Player.js` already stands the empty one.
 - **The counter** is the one `gift_catch` already owns. Relabel it rather than
   adding a second: `Gifts 3 / 5` while catching, `Delivered 1 / 5` while
   delivering. Two counters in a column would be two places to read the same
