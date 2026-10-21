@@ -45,6 +45,50 @@ const DEFAULT_YAW = Math.atan2(-CAMERA_POSITION.x, -CAMERA_POSITION.y);
 const MIN_PITCH = 0.12;
 const MAX_PITCH = 1.25;
 
+// The three framings C cycles between.
+//
+// This exists because the default rig cannot see the sky. At a 45-degree field
+// of view pitched 26 degrees down onto Tode, the top edge of the frame sits
+// 3.6 degrees BELOW horizontal: every pixel is ground, the mountain peaks are
+// cropped off the top, and the aurora Aurora.js hangs over the +Y range is
+// entirely above the frame. Snow.js's header documents the same geometry from
+// the other side -- it is why the snowfall hugs the ground instead of sitting
+// out at the mountains.
+//
+// Lowering DEFAULT_PITCH for everyone would fix it and recompose every shot in
+// the game, and Snow.js's ceiling constants are a documented function of that
+// pitch. A toggle costs nothing and leaves the default frame exactly as it was.
+//
+// Two numbers per view:
+//
+// - `pitch` is where the camera SITS, as an angle above Tode. Each one is
+//   DEFAULT_PITCH or one of the clamp bounds above, deliberately: a view that
+//   started outside the clamp would snap the moment the mouse moved.
+// - `lookUp` is how far above his feet the camera AIMS, in world units. This
+//   is the part that matters. Tilting the frustum up by moving the camera
+//   *down* is what MIN_PITCH exists to prevent -- it ends with the lens inside
+//   the ground -- so the sky view keeps a sane camera position and raises its
+//   aim instead.
+const VIEWS = [
+  // Unchanged, and first so the game opens framed as it always was. A zero
+  // lookUp is the old one-off `lookAt` at his feet.
+  { name: 'Chase', pitch: DEFAULT_PITCH, lookUp: 0 },
+  // The sky. Camera at the low clamp, aiming 11.9 degrees up, which puts the
+  // frame between -10.6 and +34.4 degrees: at the start altitude of 200 the
+  // aurora spans +9.8 to +38.9, so this holds about 85 per cent of the band
+  // including the bright base, and still keeps the horizon and Tode himself
+  // in the bottom third of the shot.
+  { name: 'Sky', pitch: MIN_PITCH, lookUp: 135 },
+  // Steeply down from the high clamp, aimed at his feet. No aurora in this
+  // one by design -- it is for reading the ground: where the gift is, where
+  // the beacon points, and how close the houses are.
+  { name: 'Overhead', pitch: MAX_PITCH, lookUp: 0 },
+];
+
+const VIEW_KEY = 'KeyC';
+
+let viewIndex = 0;
+
 // Radians per pixel of mouse travel. At 0.0025 a 400-pixel sweep is most of a
 // half turn, which is about standard for a game that is not a shooter.
 const SENSITIVITY = 0.0025;
@@ -53,7 +97,7 @@ const PITCH_DIRECTION = 1;
 
 const HINT_CLASS = 'mouse-hint';
 const HINT_TEXT =
-  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Shift to boost \u00b7 Esc to release';
+  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Shift to boost \u00b7 C for view \u00b7 Esc to release';
 const VISIBLE_CLASS = 'visible';
 
 // How much wider the lens goes at full boost, in degrees. Five, which is a
@@ -132,6 +176,21 @@ export function initCameraControls(canvas) {
       MAX_PITCH,
     );
   });
+
+  // On window rather than the canvas, like every other key in the game, so it
+  // works whether or not the pointer is locked.
+  //
+  // Yaw is deliberately NOT reset: C changes how the camera is framed, not
+  // which way the player is facing, and Movement.js steers off getCameraYaw --
+  // so spinning him a quarter turn because he wanted to see the sky would be a
+  // control bug, not a camera one. It is also live during a Game Over, like
+  // updateCamera itself, so the view can still be turned on the final frame.
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== VIEW_KEY || event.repeat) return;
+
+    viewIndex = (viewIndex + 1) % VIEWS.length;
+    pitch = VIEWS[viewIndex].pitch;
+  });
 }
 
 /**
@@ -148,9 +207,18 @@ export function updateCamera(camera, player) {
     -Math.cos(yaw) * ground,
     ORBIT_DISTANCE * Math.sin(pitch),
   );
-  // Aimed at his feet, which is where the old fixed rig's one-off lookAt
-  // pointed, so he sits in the frame where he always did.
-  camera.lookAt(player.position.x, player.position.y, player.position.z);
+  // Aimed at his feet in the Chase view, which is where the old fixed rig's
+  // one-off lookAt pointed, so he sits in the frame where he always did. The
+  // Sky view raises the aim instead of dropping the camera -- see VIEWS.
+  //
+  // A world position, not a local offset: the camera is a child of the player
+  // group, but Object3D.lookAt takes a target in world space and sorts the
+  // parent transform out itself.
+  camera.lookAt(
+    player.position.x,
+    player.position.y,
+    player.position.z + VIEWS[viewIndex].lookUp,
+  );
 
   const fov = Math.round((FIELD_OF_VIEW + BOOST_FOV * boostThrust()) * 100) / 100;
 
