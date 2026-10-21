@@ -74,7 +74,7 @@ export function initGameState({ onGameOver, onRestart }) {
       return;
     }
 
-    // Space is the attack key during play, so only claim it once the run is
+    // Space is the climb key during play, so only claim it once the run is
     // over. Attack.js stands down for the same reason.
     if (event.code !== 'Space' || !gameOver) return;
 

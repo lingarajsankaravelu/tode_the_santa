@@ -51,7 +51,8 @@ const SENSITIVITY = 0.0025;
 const PITCH_DIRECTION = 1;
 
 const HINT_CLASS = 'mouse-hint';
-const HINT_TEXT = 'Click to look around \u00b7 WASD to hop \u00b7 Esc to release';
+const HINT_TEXT =
+  'Click to look around \u00b7 WASD to fly \u00b7 Q / E for height \u00b7 Esc to release';
 const VISIBLE_CLASS = 'visible';
 
 let yaw = DEFAULT_YAW;

@@ -256,6 +256,19 @@ export function createAnimator(model, clips = []) {
       else holds.delete(key);
     },
 
+    /**
+     * Rescales the running clip's playback rate.
+     *
+     * For a clip whose motion belongs to something the game is already
+     * driving -- the sleigh's `run`, which animates nothing but the legs of
+     * the four pullers hauling it. A fixed rate has them sprinting on the
+     * spot while the sleigh sits still. At 0 they stop, which freezes them
+     * mid-stride, so callers should ease it rather than switch it.
+     */
+    setTimeScale(scale) {
+      if (currentBody) currentBody.timeScale = scale;
+    },
+
     update(delta) {
       mixer.update(delta);
       updateHolds(delta);

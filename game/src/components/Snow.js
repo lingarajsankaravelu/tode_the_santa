@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { START_ALTITUDE } from './Movement.js';
 
 const FLAKE_COUNT = 900;
 // World units across, not pixels: sizeAttenuation is on, so a flake near the
@@ -17,6 +18,13 @@ const FLAKE_COLOR = 0xaebfd6;
 // The band is sized to the camera's frustum, which is the only thing that
 // decides whether the snow is visible at all.
 //
+// Everything below is measured from the PLAYER'S OWN ALTITUDE, not from the
+// ground. It used to be the same thing -- Tode stood at z = 0 -- but the
+// sleigh flies between 100 and 400, and a band pinned to the ground is a mat
+// of snow a few hundred units underneath the player, which at that distance
+// is no snowfall at all. The band travels up and down with him the same way
+// it already travelled sideways with him.
+//
 // Camera.js sits 180 above Tode and pitches 26 degrees down with a 45 degree
 // field of view, which puts the TOP edge of the view 3.6 degrees BELOW
 // horizontal. That edge therefore starts at the camera's own height and only
@@ -33,7 +41,9 @@ const FLAKE_COLOR = 0xaebfd6;
 // FIELD_HALF behind the player is teleported the full span forward, which is
 // only seamless on a shape that tiles.
 const FIELD_HALF = 900;
-// Headroom directly above the player, a little under the camera's own height.
+// Headroom directly above the player, a little under the camera's own
+// height. The band's floor is the player's own altitude, so he flies through
+// the weather rather than under it.
 const CEILING_NEAR = 150;
 // How fast the frame's top edge drops as the ground recedes: tan(3.6 degrees).
 // A flake's ceiling is CEILING_NEAR minus this times its distance out, so the
@@ -43,9 +53,10 @@ const CEILING_NEAR = 150;
 const CEILING_TAPER = 0.063;
 const CEILING_MIN = 55;
 
-// Per frame, matching how the rest of the game steps -- Movement.js advances
-// a hop by a per-frame fraction too, so the whole scene speeds up or slows
-// down together rather than the weather drifting out of step with it.
+// Per frame rather than per second. Movement.js used to step this way too
+// and no longer does -- flight is on a delta -- so on a slow machine the
+// weather now falls behind the sleigh rather than with it. Left alone: this
+// is the snowfall spec's number, and changing it is that spec's call.
 //
 // Slow on purpose. Over a fall of about 150 units this is six to seventeen
 // seconds from ceiling to ground, which lets the sway below actually read as
@@ -123,8 +134,10 @@ export function createSnow() {
     positions[offset + 1] = y;
     // Z is up in this game. Seeded across the flake's own headroom so the
     // first frame already shows a fall in progress rather than a curtain
-    // dropping in.
-    positions[offset + 2] = Math.random() * ceilingAt(Math.hypot(x, y));
+    // dropping in -- which is why it is seeded from the altitude a run
+    // starts at, and not from zero: every flake would otherwise be below the
+    // band on frame one and the whole field would snap upward at once.
+    positions[offset + 2] = START_ALTITUDE + Math.random() * ceilingAt(Math.hypot(x, y));
 
     speeds[index] = THREE.MathUtils.lerp(FALL_SPEED_MIN, FALL_SPEED_MAX, Math.random());
     phases[index] = Math.random() * Math.PI * 2;
@@ -179,7 +192,7 @@ export function createSnow() {
 export function updateSnow(snow, player) {
   const position = snow.geometry.attributes.position;
   const coordinates = position.array;
-  const { x: playerX, y: playerY } = player.position;
+  const { x: playerX, y: playerY, z: playerZ } = player.position;
   const span = FIELD_HALF * 2;
 
   for (let index = 0; index < FLAKE_COUNT; index += 1) {
@@ -200,9 +213,10 @@ export function updateSnow(snow, player) {
     if (fromPlayerY > FIELD_HALF) coordinates[offset + 1] -= span;
     else if (fromPlayerY < -FIELD_HALF) coordinates[offset + 1] += span;
 
-    if (coordinates[offset + 2] < 0) {
-      // Measured now, not at build time: the flake has moved, and so has he.
-      coordinates[offset + 2] = ceilingAt(
+    if (coordinates[offset + 2] < playerZ) {
+      // Measured now, not at build time: the flake has moved, and so has he
+      // -- in three axes rather than two, since the sleigh climbs.
+      coordinates[offset + 2] = playerZ + ceilingAt(
         Math.hypot(coordinates[offset] - playerX, coordinates[offset + 1] - playerY),
       );
     }
