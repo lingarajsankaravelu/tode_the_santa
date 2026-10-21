@@ -12,6 +12,11 @@ const MODEL_PATH = '/models/river_landscape.glb';
 // Changing this breaks the agreement with WORLD_RADIUS; change FLAT_R in
 // tools/generate_river_landscape.mjs instead.
 const MODEL_SCALE = 41;
+// Exported because `Terrain.js` needs it: the ground height it computes comes
+// out of the generator's own maths in MODEL units, and this is the only number
+// that turns those into world ones. Two copies of it would be two answers to
+// where the ground is.
+
 // Material name baked into the .glb by the generator. The water plane is the
 // one mesh that must not cast: a transparent surface throwing a shadow reads
 // as a dark slab lying on the riverbed.
@@ -62,3 +67,9 @@ export function createLandscape() {
 
   return landscape;
 }
+
+// Exported because `Terrain.js` needs both: the ground height it computes comes
+// out of the generator's own maths in MODEL units, and these are the only two
+// numbers that turn those into world ones. A second copy of either would be a
+// second answer to where the ground is.
+export { MODEL_SCALE as TERRAIN_SCALE, GROUND_Z };

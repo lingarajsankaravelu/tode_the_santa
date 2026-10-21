@@ -6,12 +6,16 @@
 // Importing Enemies/Movement/Score here instead would make those imports
 // circular, since they all need to read the flag.
 
-// God mode: nothing can end the run. It does NOT lift the world bound --
-// Tode stays at z = 0 while the ground outside the basin rises, so walking
-// out of it reads as falling through the map. It lives here because "can this
-// run end?" is exactly what this module owns, and because both death paths --
-// Tode hopping into a monster, and a monster reaching Tode -- already funnel
-// through triggerGameOver(), so one guard covers them and any future one.
+// God mode: nothing can end the run. It does NOT lift the world bound, and it
+// no longer needs the warning that used to sit here about walking out of the
+// basin and falling through the map -- `Terrain.js` knows where the ground is
+// everywhere now, and `Movement.js` rests the sleigh on it instead of killing
+// it while this is on.
+//
+// It lives here because "can this run end?" is exactly what this module owns,
+// and because every death path -- flying into a house, flying into the ground,
+// and letting a gift reach it -- funnels through triggerGameOver(), so one
+// guard covers them all.
 //
 // Off unless asked for: add ?god to the URL, or press G at any time.
 const GOD_MODE_PARAM = 'god';
@@ -23,8 +27,12 @@ const OVERLAY_CLASS = 'game-over';
 const OVERLAY_TITLE = 'Game Over';
 const OVERLAY_HINT = 'Press Space to try again';
 const VISIBLE_CLASS = 'visible';
+// Shown when a caller does not say why. Every caller does, but a run that ends
+// with an empty line where the reason goes is worse than a vague one.
+const DEFAULT_REASON = 'The run ended';
 
 let overlayElement = null;
+let reasonElement = null;
 let badgeElement = null;
 let gameOver = false;
 let godMode = new URLSearchParams(window.location.search).has(GOD_MODE_PARAM);
@@ -58,7 +66,9 @@ export function initGameState({ onGameOver, onRestart }) {
 
   overlayElement = document.createElement('div');
   overlayElement.className = OVERLAY_CLASS;
-  overlayElement.innerHTML = `<h1>${OVERLAY_TITLE}</h1><p>${OVERLAY_HINT}</p>`;
+  overlayElement.innerHTML =
+    `<h1>${OVERLAY_TITLE}</h1><p class="reason"></p><p>${OVERLAY_HINT}</p>`;
+  reasonElement = overlayElement.querySelector('.reason');
   document.body.appendChild(overlayElement);
 
   badgeElement = document.createElement('div');
@@ -87,16 +97,27 @@ export function isGameOver() {
   return gameOver;
 }
 
-export function triggerGameOver() {
-  // The one guard that makes god mode work. Both callers -- Movement.js when
-  // Tode hops into a monster, Enemies.js when a monster reaches him -- come
-  // through here, so neither needs to know about it.
+/**
+ * Ends the run, and says why on the overlay.
+ *
+ * `reason` is a short sentence in the player's terms -- "A gift reached the
+ * snow", not "gift.z <= crashFloorAt". There are five ways to lose now and
+ * four of them look alike from the cockpit, so an overlay that only says
+ * "Game Over" leaves the player to infer the rules from silence. That is how
+ * climbing to look for a gift gets blamed for a gift landing somewhere behind
+ * them.
+ */
+export function triggerGameOver(reason = DEFAULT_REASON) {
+  // The one guard that makes god mode work. Every caller comes through here,
+  // so none of them needs to know about it.
   if (godMode) return;
 
-  // Several enemies can reach Tode on the same frame; only the first counts.
+  // Two systems can end the run on the same frame; only the first counts, and
+  // that includes which reason is shown.
   if (gameOver) return;
 
   gameOver = true;
+  reasonElement.textContent = reason;
   showOverlay(true);
   handlers.onGameOver();
 }

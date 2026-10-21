@@ -1,5 +1,27 @@
 ### Specification for AI agent: The sleigh, and flight
 
+> **Extended, after shipping, and this spec's landing survived it.** The world
+> opened up: `WORLD_RADIUS` went from 700 to 1600, `MAX_ALTITUDE` from 400 to
+> 900, and `Terrain.js` can now answer where the ground is anywhere on the map
+> — anything from -95 in the river channel to 575 on the far ridge.
+>
+> **`E` still lowers the sleigh onto the snow, and it now slides on it.**
+> `SLIDE_DRAG = 0.5` against the air's 2.2, so touching down with speed on
+> carries the sleigh about six seconds across the snowfield instead of one and
+> a half; the bank goes level on the ground; and a grounded sleigh follows the
+> surface down as well as up until `Q` lifts it off, because there is no
+> gravity on the vertical axis to bring it back otherwise.
+>
+> What the open world added is ground that is **not** snow. `isLandableAt` is
+> the generator's own `snowHere` test, so the river, the bare rock the snow
+> slid off, and the forest canopy the height field cannot see into are all
+> fatal — as are the roofs, and flying into a house below the ridge now ends
+> the run rather than stopping the sleigh dead. The flat basin out to 690 is
+> landable everywhere, which is where the town is.
+>
+> The rest of the flight model is untouched: the key table, `facingFor`, the
+> acceleration curve, the air drag, and `LIFT_SPEED = 120`.
+
 > **Rewritten.** The outline this replaces described a sleigh parked in a
 > field as a landmark, and recommended *cutting* driving: "a second movement
 > model on top of the hop queue, and a large task."

@@ -47,6 +47,14 @@ function tryPlay() {
   if (played) played.catch(() => {});
 }
 
+/**
+ * Whether the game is muted. Read by `Sound.js`, so the M key silences the
+ * effects along with the theme rather than only the music.
+ */
+export function isMuted() {
+  return muted;
+}
+
 export function setMuted(value) {
   muted = value;
   showBadge(muted);

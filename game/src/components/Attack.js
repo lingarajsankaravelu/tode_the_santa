@@ -17,7 +17,7 @@ import * as THREE from 'three';
 // only part of the attack that was not about hitting something.
 // import { enemies, removeEnemy } from './Enemies.js';
 // import { getCollisionRadius } from './Collision.js';
-// import { addKillScore } from './Score.js';
+// import { addCatchScore } from './Score.js';
 import { isGameOver } from './GameState.js';
 import { getDifficulty } from './Difficulty.js';
 
@@ -93,7 +93,7 @@ function showFlash(scene, player, attackRadius) {
 //     // still takes the hit.
 //     if (distance <= attackRadius + getCollisionRadius(enemy)) {
 //       removeEnemy(scene, enemy);
-//       addKillScore();
+//       addCatchScore();
 //       killed += 1;
 //     }
 //   });

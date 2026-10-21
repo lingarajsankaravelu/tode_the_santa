@@ -10,6 +10,7 @@ body {
   background: #1d2b47;
 }
 
+/* Retired with Score.js. Left in place because the module is: see its header.
 .score {
   position: absolute;
   top: 16px;
@@ -20,7 +21,45 @@ body {
   font-weight: 700;
   color: #ffffff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  /* Purely a readout: never steal clicks from the canvas. */
+  pointer-events: none;
+  user-select: none;
+}
+*/
+
+.run-time {
+  /* Where the score used to sit, and at the size it used to be: top centre,
+     16px, 32px tall. The clock IS the score now, so it inherits the slot
+     rather than being fitted in beside it. Tabular figures because a
+     proportional 1 is narrower than a 0, and a timer whose digits change ten
+     times a second visibly jitters without them. */
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  user-select: none;
+}
+
+.best-time {
+  /* Under the gift count, third in the centre column. Smaller and dimmer than
+     the live clock: it is the thing being chased, not the thing happening. */
+  position: fixed;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: #ffffff;
+  opacity: 0.6;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
   pointer-events: none;
   user-select: none;
 }
@@ -126,4 +165,103 @@ body {
 
 .mouse-hint.visible {
   display: block;
+}
+
+.gift-count {
+  /* Top centre, under the score, which sits at 16px and is 32px tall. With the
+     monsters gone the score is a survival timer and little else; the gift
+     count is the readout that matters now and belongs beside it. Styled as the
+     .god-mode and .music-muted badges are -- same pill, same family, same
+     letter-spacing -- but at a readable size rather than their 12px: those two
+     are passive status, this one is the objective. */
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  /* Like every other readout, and it matters more than it used to: the canvas
+     needs its clicks for pointer lock. */
+  pointer-events: none;
+}
+
+.game-over .reason {
+  /* Between the title and the restart hint. Brighter than the hint, because it
+     is the thing the player actually needs to read: five ways to lose look
+     alike from the cockpit. */
+  margin: 0;
+  max-width: 24em;
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffd964;
+  opacity: 1;
+}
+
+/* The bottom pill is retired. It did its job -- an arrow and a range in a
+   black capsule, bottom centre -- and it was the one thing on screen that was
+   not snow, sky or sleigh: a dashboard bolted onto a night flight. The cue
+   survives as `.gift-compass` below, which carries the direction and nothing
+   else. Kept commented rather than deleted, the way Score.js and Enemies.js
+   are, because putting the range back is this block and one line of JS.
+
+.gift-beacon {
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  color: #ffe9a0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.gift-beacon.visible { display: flex; }
+
+.gift-beacon-arrow { font-size: 22px; line-height: 1; }
+
+.gift-beacon-range {
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+*/
+
+.gift-compass {
+  /* Rides a ring around the centre of the screen rather than sitting in a
+     corner, so it reads as a thing out there in the dark that happens to be
+     off the edge of the view -- not as a widget. The JS owns both the
+     rotation about that ring and the radius, because the radius depends on
+     the viewport's shorter side. */
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  /* No background, no border, no capsule. Just light, in the parachute
+     strobe's green -- this mark and that bulb are one cue seen at two
+     distances, so they are one colour. */
+  font-size: 26px;
+  line-height: 1;
+  color: #3cff8e;
+  text-shadow: 0 0 14px rgba(60, 255, 142, 0.55);
+  /* Written every frame by the JS, which ramps it with the bearing -- so no
+     transition here, or the two would fight. Zero until there is something
+     off-screen to point at. */
+  opacity: 0;
+  /* Like every other readout: the canvas needs its clicks for pointer lock. */
+  pointer-events: none;
+  user-select: none;
 }

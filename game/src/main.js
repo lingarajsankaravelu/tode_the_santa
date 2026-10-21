@@ -18,7 +18,16 @@ import { initInput, updateMovement, resetMovement } from './components/Movement.
 // and hit nothing. Attack.js is kept on disk the way Enemies.js is -- this
 // import and the two call sites below are the whole of the wiring.
 // import { initAttackInput, updateAttack } from './components/Attack.js';
-import { initScore, updateScore, resetScore } from './components/Score.js';
+// The score is retired -- see Score.js's header. A game about how fast Santa
+// can collect and deliver wants a clock, not an accumulator.
+// import { initScore, updateScore, resetScore } from './components/Score.js';
+import { initTimer, updateTimer, resetTimer } from './components/Timer.js';
+import { initGifts, updateGifts, resetGifts, gifts } from './components/Gifts.js';
+import {
+  createGiftBeacon,
+  initGiftBeacon,
+  updateGiftBeacon,
+} from './components/GiftBeacon.js';
 import { initGameState, isGameOver } from './components/GameState.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
@@ -71,6 +80,11 @@ player.add(camera);
 const snow = createSnow();
 scene.add(snow);
 
+// Hangs off the scene next to the snow, not off the player: it stands on the
+// ground at the gift's position, which has nothing to do with where the sleigh
+// is. Added after the player only because it is updated against him.
+scene.add(createGiftBeacon());
+
 const renderer = createRenderer();
 
 initInput();
@@ -78,7 +92,12 @@ initInput();
 // element, and the renderer owns the only one.
 initCameraControls(renderer.domElement);
 // initAttackInput();
-initScore();
+// initScore();
+initTimer();
+// Creates the counter and starts a_gift_box.glb loading. The gifts only begin
+// appearing once both that and the sleigh are in.
+initGifts();
+initGiftBeacon();
 // Nothing to update per frame: the element loops itself, and it carries on
 // across a Game Over the same way the snow and the lights do.
 initMusic();
@@ -95,7 +114,9 @@ initGameState({
   onRestart: () => {
     resetMovement(player);
     // clearEnemies(scene);
-    resetScore();
+    resetGifts(scene, player);
+    // resetScore();
+    resetTimer();
     setPlayerVisible(true);
   },
 });
@@ -114,13 +135,21 @@ renderer.setAnimationLoop(() => {
   if (!isGameOver()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
-    // Both lists are ignored now that movement is flight: nothing collides
-    // with anything above MIN_ALTITUDE. They stay in the call rather than
-    // being dropped from the signature, so a collision term is a change to
-    // Movement.js alone.
+    // `houses` is live again, and fatal: below the ridge, flying into one ends
+    // the run. The empty first list is the monsters, kept in the call rather
+    // than dropped from the signature so restoring the chase is one word.
     updateMovement(player, [], houses);
+    // No obstacle list, unlike the call above: the only two things that can
+    // happen to a gift in the air are being caught and reaching the ground.
+    updateGifts(scene, player);
+    // After updateGifts, so the beam is on this frame's gift rather than
+    // trailing it by one. `gifts[0]` is the only gift there can be -- one in
+    // the air at a time -- and undefined between them, which the beacon reads
+    // as nothing to point at.
+    updateGiftBeacon(gifts[0] ?? null, player);
     // updateEnemies(scene, player, houses);
-    updateScore();
+    // updateScore();
+    updateTimer();
   }
 
   // Was kept outside the freeze so a flash caught mid-fade finished cleanly

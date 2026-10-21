@@ -11,9 +11,15 @@ const SLEIGH_PATH = '/models/snow_sleigh.glb';
 const TODE_PATH = '/models/tode.glb';
 // The EMPTY one, and that is the story rather than a placeholder: the storm
 // took the gifts before the game starts, so the sack is empty until Tode
-// catches them back. `christmas_gift_sack.glb` is its full counterpart and
-// `core_loop/gift_delivery/spec.md` owns the swap.
+// catches them back. `christmas_gift_sack.glb` is its full counterpart: the
+// fifth catch fills it and `core_loop/gift_delivery/spec.md` empties it again,
+// both through `setSackFull` below.
 const SACK_PATH = '/models/empty_christmas_sack.glb';
+// Its full counterpart, loaded alongside it rather than fetched at the moment
+// of the swap: `core_loop/gift_catch/spec.md` fills the sack on the fifth
+// catch, and a 2 MB load starting on that frame would hitch exactly as the
+// game hands out its reward. Both sacks ride the carriage and one is visible.
+const FULL_SACK_PATH = '/models/christmas_gift_sack.glb';
 
 // The file is 4.638 x 1.552 x 1.669 in its own units, so this makes it
 // 74.2 long x 24.8 tall x 26.7 wide, of which the carriage is 31.3 x 20.0 x
@@ -69,6 +75,54 @@ const CENTRE_Z = 0.495;
 const SEAT_X = -3.3;
 const SACK_X = -4.1;
 
+/**
+ * A point of the sleigh's own geometry, in world units, once the recentring in
+ * `createPlayer` is applied. Centring matters beyond looks: the camera aims at
+ * `player.position` and the gift specs measure their catch radius from it, so
+ * the middle of the sleigh has to be it.
+ */
+function onSleigh(x, y, z) {
+  return new THREE.Vector3(
+    (x - (SLEIGH_BOUNDS.min.x + SLEIGH_BOUNDS.max.x) / 2) * SLEIGH_SCALE,
+    (y - (SLEIGH_BOUNDS.min.y + SLEIGH_BOUNDS.max.y) / 2) * SLEIGH_SCALE,
+    (z - (SLEIGH_BOUNDS.min.z + SLEIGH_BOUNDS.max.z) / 2) * SLEIGH_SCALE,
+  );
+}
+
+/**
+ * Stands anything on the carriage floor at a lengthwise place, by its own
+ * measured box -- the same way Tode used to be stood on the ground.
+ *
+ * Module level rather than a closure inside the loader, so a later phase that
+ * puts something else in the carriage has one definition of where the floor is
+ * instead of a second copy of FLOOR_Y, CENTRE_Z and the recentring.
+ *
+ * Measuring at runtime is safe for these models and not for the sleigh:
+ * tode.glb is one fused mesh with no skin, which is the whole reason it cannot
+ * be animated and also what makes its box trustworthy, and neither sack
+ * carries a skin either.
+ */
+export function standOnSleighFloor(object, x) {
+  const at = onSleigh(x, FLOOR_Y, CENTRE_Z);
+
+  object.position.set(at.x, at.y - new THREE.Box3().setFromObject(object).min.y, at.z);
+}
+
+/**
+ * Shows the full sack or the empty one.
+ *
+ * `core_loop/gift_catch/spec.md` calls this on the fifth catch and
+ * `gift_delivery` calls it again when the last gift leaves the sack. A no-op
+ * before the glTFs land, which is the only state where neither sack exists.
+ */
+export function setSackFull(player, full) {
+  if (!player.emptySack || !player.fullSack) return;
+
+  player.emptySack.visible = !full;
+  player.fullSack.visible = full;
+  player.sack = full ? player.fullSack : player.emptySack;
+}
+
 export function createPlayer() {
   const player = new THREE.Group();
   player.position.set(0, 0, START_ALTITUDE);
@@ -107,11 +161,13 @@ export function createPlayer() {
     loader.loadAsync(SLEIGH_PATH),
     loader.loadAsync(TODE_PATH),
     loader.loadAsync(SACK_PATH),
+    loader.loadAsync(FULL_SACK_PATH),
   ]).then(
-    ([sleighGltf, todeGltf, sackGltf]) => {
+    ([sleighGltf, todeGltf, sackGltf, fullSackGltf]) => {
       const sleigh = sleighGltf.scene;
       const tode = todeGltf.scene;
       const sack = sackGltf.scene;
+      const fullSack = fullSackGltf.scene;
 
       // Dressed before it is scaled, and that order is load-bearing: the suit
       // places itself against the model's own bounding box, which is only in
@@ -119,16 +175,6 @@ export function createPlayer() {
       tode.add(createSantaSuit(tode));
 
       sleigh.scale.setScalar(SLEIGH_SCALE);
-
-      // A point of the sleigh's own geometry, in world units, once the
-      // recentring below is applied. Centring matters beyond looks: the
-      // camera aims at `player.position` and the gift specs measure their
-      // catch radius from it, so the middle of the sleigh has to be it.
-      const onSleigh = (x, y, z) => new THREE.Vector3(
-        (x - (SLEIGH_BOUNDS.min.x + SLEIGH_BOUNDS.max.x) / 2) * SLEIGH_SCALE,
-        (y - (SLEIGH_BOUNDS.min.y + SLEIGH_BOUNDS.max.y) / 2) * SLEIGH_SCALE,
-        (z - (SLEIGH_BOUNDS.min.z + SLEIGH_BOUNDS.max.z) / 2) * SLEIGH_SCALE,
-      );
 
       sleigh.position.copy(onSleigh(0, 0, 0));
 
@@ -139,26 +185,26 @@ export function createPlayer() {
       tode.scale.setScalar(TODE_SCALE);
       tode.rotation.y = Math.PI / 2;
 
-      // Stands anything on the carriage floor, by its own measured box --
-      // the same way Tode used to be stood on the ground. Measuring at
-      // runtime is safe for these two and not for the sleigh: tode.glb is one
-      // fused mesh with no skin, which is the whole reason it cannot be
-      // animated and also what makes its box trustworthy, and neither sack
-      // carries a skin either.
-      const standOn = (object, x) => {
-        const at = onSleigh(x, FLOOR_Y, CENTRE_Z);
+      standOnSleighFloor(tode, SEAT_X);
 
-        object.position.set(at.x, at.y - new THREE.Box3().setFromObject(object).min.y, at.z);
-      };
-
-      standOn(tode, SEAT_X);
-
+      // Each sack is scaled and then stood on the floor by its OWN box. The
+      // full one is 46% wider and 33% taller than the empty one, so the swap
+      // is not a visibility toggle at one shared transform -- but it is a
+      // visibility toggle between two separately stood models, which is what
+      // these two lines buy.
       sack.scale.setScalar(SACK_SCALE);
-      standOn(sack, SACK_X);
+      standOnSleighFloor(sack, SACK_X);
+
+      fullSack.scale.setScalar(SACK_SCALE);
+      standOnSleighFloor(fullSack, SACK_X);
+      // The run opens with the storm having taken the gifts, so the sack Tode
+      // sets out with is the empty one.
+      fullSack.visible = false;
 
       tilt.add(sleigh);
       tilt.add(tode);
       tilt.add(sack);
+      tilt.add(fullSack);
 
       // Last, and into `tilt` with the rest, so the lanterns bank with the
       // sleigh instead of hanging level over a rolling carriage. It is handed
@@ -166,10 +212,13 @@ export function createPlayer() {
       // of this model is, and it lives in this file.
       tilt.add(createSleighLights(onSleigh));
 
-      // Exposed for the phase that swaps it for the full one. Parented to the
-      // sleigh rather than to `player`, which is the trap gift_delivery's
-      // spec repeats: the camera is a child of `player`, so anything added
-      // there is added in front of the lens.
+      // Both exposed for `setSackFull` above, and `player.sack` kept pointing
+      // at whichever one is currently shown. Parented to the sleigh rather
+      // than to `player`, which is the trap gift_delivery's spec repeats: the
+      // camera is a child of `player`, so anything added there is added in
+      // front of the lens.
+      player.emptySack = sack;
+      player.fullSack = fullSack;
       player.sack = sack;
 
       // Half the sleigh's own height, which is how far its underside sits
