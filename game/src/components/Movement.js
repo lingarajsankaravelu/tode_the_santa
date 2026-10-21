@@ -145,23 +145,22 @@ const MOVE_KEYS = {
 // is looking.
 //
 // Q and E are the documented pair -- they sit next to WASD, so a hand already
-// on the movement keys can change height without leaving them. Space is kept
-// as an alias for anyone who reaches for it first.
+// on the movement keys can change height without leaving them.
 //
-// Space being here is temporary. `core_loop/gift_delivery/spec.md` wants it
-// for the drop and `GameState.js` claims it for restart, and now that Q and E
-// exist nothing is lost by unbinding it. Left in until one of those two
-// actually needs it.
+// **Space used to alias Q here, and `Delivery.js` has now taken it** -- which
+// is what the note that sat here said would happen. Nothing was lost: Q has
+// done the job since the flight model landed, the mouse hint has never
+// advertised anything else, and Space is the most natural "release the thing
+// you are carrying" key on a keyboard. One consequence worth knowing about:
+// the `preventDefault` below no longer sees Space, so stopping it scrolling
+// the page is `Delivery.js`'s job and is done in its own listener.
 //
-// **Shift used to descend here, and now boosts instead.** It was only ever an
-// alias -- E has done the job since the flight model landed, and the mouse
-// hint has never advertised anything but Q and E -- and hold-Shift-to-go-fast
-// is the one binding a player is most likely to try without being told. See
-// `Boost.js`.
+// **Shift used to descend here, and now boosts instead.** Same story: it was
+// only ever an alias, and hold-Shift-to-go-fast is the one binding a player is
+// most likely to try without being told. See `Boost.js`.
 const CLIMB_KEYS = {
   KeyQ: 1,
   KeyE: -1,
-  Space: 1,
 };
 
 // Which keys are down right now. A set rather than the hop's queue: flight is
@@ -195,8 +194,9 @@ export function initInput() {
   window.addEventListener('keydown', (event) => {
     if (!MOVE_KEYS[event.code] && !CLIMB_KEYS[event.code]) return;
 
-    // Stops Space scrolling the page. It does not stop GameState's own
-    // restart listener seeing the key -- that would take stopPropagation.
+    // Stops the arrow keys scrolling the page -- and, until `Delivery.js` took
+    // Space, Space. It does not stop another listener seeing the key, here or
+    // there; that would take stopPropagation.
     event.preventDefault();
     held.add(event.code);
   });
@@ -440,6 +440,19 @@ function orient(player, direction) {
 
   bank += (target - bank) * BANK_SMOOTHING;
   player.tilt.rotation.x = bank;
+}
+
+/**
+ * The sleigh's horizontal velocity, copied rather than handed over.
+ *
+ * `Delivery.js` needs it: a dropped gift keeps the velocity it was released
+ * at, and that -- against how high the sleigh was -- is the whole of the lead
+ * the player has to judge. A copy because this is the vector the flight model
+ * integrates every frame, and handing out the live object would let a caller
+ * fly the sleigh by accident.
+ */
+export function sleighVelocity() {
+  return { x: velocity.x, y: velocity.y };
 }
 
 /**

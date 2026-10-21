@@ -21,24 +21,58 @@ import { initInput, updateMovement, resetMovement } from './components/Movement.
 // The score is retired -- see Score.js's header. A game about how fast Santa
 // can collect and deliver wants a clock, not an accumulator.
 // import { initScore, updateScore, resetScore } from './components/Score.js';
-import { initTimer, updateTimer, resetTimer } from './components/Timer.js';
+import {
+  initTimer,
+  updateTimer,
+  resetTimer,
+  stopTimer,
+  getElapsedText,
+  isBestRun,
+} from './components/Timer.js';
 // The boost is updated from Movement.js rather than here: it burns only while
 // the sleigh is being asked to go somewhere, and that module is the one that
 // knows. All this owns is the readout's life cycle.
 import { initBoost, resetBoost } from './components/Boost.js';
-import { initGifts, updateGifts, resetGifts, gifts } from './components/Gifts.js';
+import {
+  initGifts,
+  updateGifts,
+  resetGifts,
+  gifts,
+  allCaught,
+  isCatchSkipped,
+} from './components/Gifts.js';
+import {
+  initDeliveryInput,
+  updateDelivery,
+  resetDelivery,
+  createDoorstepMarkers,
+} from './components/Delivery.js';
 import {
   createGiftBeacon,
   initGiftBeacon,
   updateGiftBeacon,
 } from './components/GiftBeacon.js';
-import { initGameState, isGameOver } from './components/GameState.js';
+import {
+  initGameState,
+  isRunLive,
+  setGodMode,
+  beginRun,
+  restartGame,
+} from './components/GameState.js';
+import {
+  initTitleScreen,
+  openTitleScreen,
+} from './components/TitleScreen.js';
 import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
 import { createAurora, updateAurora } from './components/Aurora.js';
-import { updateChristmasLights } from './components/ChristmasLights.js';
+import {
+  updateChristmasLights,
+  celebrate,
+  resetChristmasLights,
+} from './components/ChristmasLights.js';
 import { updateSmoke } from './components/Smoke.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
@@ -97,6 +131,11 @@ scene.add(aurora);
 // is. Added after the player only because it is updated against him.
 scene.add(createGiftBeacon());
 
+// The five marked doorsteps, next to the beacon and on the scene for the same
+// reason: they stand on the ground at a fixed point of the town, and the map
+// group is where the town itself lives. Hidden until the sack is full.
+scene.add(createDoorstepMarkers());
+
 const renderer = createRenderer();
 
 initInput();
@@ -111,6 +150,10 @@ initBoost();
 // Creates the counter and starts a_gift_box.glb loading. The gifts only begin
 // appearing once both that and the sleigh are in.
 initGifts();
+// Binds Space, which `Movement.js` has just given up. Nothing else to set up:
+// the gifts it drops are clones of the template `initGifts` is loading, and
+// the counter it writes to is the one `initGifts` creates.
+initDeliveryInput();
 initGiftBeacon();
 // Nothing to update per frame: the element loops itself, and it carries on
 // across a Game Over the same way the snow and the lights do.
@@ -123,19 +166,64 @@ function setPlayerVisible(visible) {
   if (player.model) player.model.visible = visible;
 }
 
+// Built before `initGameState`, which hands it the "Main menu" option on the
+// Game Over screen, and shown at the bottom of this file.
+initTitleScreen({ onStart: () => restartGame() });
+
 initGameState({
   onGameOver: () => setPlayerVisible(false),
+  // The won ending. Tode is NOT hidden, unlike the lost one: he has just
+  // finished the round, and the town coming up behind him is what the screen
+  // is there to show. The clock stops here and nowhere else -- this is the
+  // call `Timer.js` has been waiting for since the fifth catch stopped
+  // standing in for an ending.
+  onWin: () => {
+    stopTimer();
+    celebrate();
+  },
+  // The Game Over screen's second option. Routed through here rather than
+  // imported there, like every other thing `GameState.js` does not know
+  // about.
+  onMainMenu: () => openTitleScreen(),
+  // What both ending screens print as the result. Handed in rather than
+  // imported there, because `GameState.js` imports nothing -- see its header.
+  getTime: getElapsedText,
+  // And whether that result is a record, which only the win screen asks.
+  isBestRun,
   onRestart: () => {
     resetMovement(player);
     // clearEnemies(scene);
     resetGifts(scene, player);
+    // Every gift in the air, lying in the snow, and standing at a door.
+    resetDelivery(scene);
     // resetScore();
     resetTimer();
     // A full tank, like the start of any run.
     resetBoost();
+    // Back to twinkling. The delivered presents are the easy half of a
+    // restart to remember; this is the half that will be forgotten, because
+    // nothing visibly breaks -- the second run simply starts with the town
+    // already celebrating and the ending has nothing left to give.
+    resetChristmasLights();
     setPlayerVisible(true);
   },
 });
+
+// `?deliver` opens the run in the delivery phase, and brings god mode with it:
+// the point of the shortcut is to fly to town and drop five presents, and a
+// roof or a stand of trees ending that on the way in is the catching phase's
+// hazard being paid for twice. Switched on from here rather than inside
+// `GameState.js`, which imports nothing and must not learn what a gift is;
+// after `initGameState`, because the badge it shows is created there.
+if (isCatchSkipped()) {
+  setGodMode(true);
+  // Straight past the title screen: the point of the shortcut is to be in the
+  // air with five gifts, and `beginRun` rather than `restartGame` because
+  // there is nothing to reset at boot and the models are not in yet.
+  beginRun();
+} else {
+  openTitleScreen();
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -147,8 +235,11 @@ window.addEventListener('resize', () => {
 updateDifficulty();
 
 renderer.setAnimationLoop(() => {
-  // Everything that moves or counts stands still once the run is over.
-  if (!isGameOver()) {
+  // Everything that moves or counts stands still unless a run is being
+  // played -- which is not the same question as "is it over". The title
+  // screen is up before the first run and between runs, and the world has to
+  // hold still behind it too.
+  if (isRunLive()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
     // `houses` is live again, and fatal: below the ridge, flying into one ends
@@ -163,6 +254,13 @@ renderer.setAnimationLoop(() => {
     // the air at a time -- and undefined between them, which the beacon reads
     // as nothing to point at.
     updateGiftBeacon(gifts[0] ?? null, player);
+    // The second phase, gated on the first finishing and on nothing else.
+    // Three phases that run strictly in order, each gated on the previous
+    // one's predicate, are a condition in the render loop rather than a phase
+    // machine -- a machine earns its place when a phase can be re-entered or
+    // skipped, and none of these can. The third, winning, is
+    // `conclusion/win_state/spec.md`.
+    if (allCaught()) updateDelivery(scene, player);
     // updateEnemies(scene, player, houses);
     // updateScore();
     updateTimer();

@@ -25,7 +25,6 @@ import { setSackFull } from './Player.js';
 import { groundHeightAt } from './Terrain.js';
 import { WORLD_RADIUS, MAX_ALTITUDE } from './Movement.js';
 import { houses } from './House.js';
-import { stopTimer } from './Timer.js';
 import { play } from './Sound.js';
 import { createParachute, updateParachute } from './Parachute.js';
 import { refillBoost } from './Boost.js';
@@ -141,6 +140,34 @@ const CATCH_RADIUS = 49;
 // sleigh and into the ground.
 const MAX_DELTA = 0.1;
 
+// ---------------------------------------------------------------------------
+// Debug: `?deliver` in the URL opens the run with all five gifts already
+// caught, the sack full and god mode on -- straight into the delivery phase.
+//
+// It exists because the second phase is 30 to 60 seconds of play behind the
+// first one, and "fly to town and drop five presents" is not a thing anyone
+// should have to catch five falling boxes to look at. The same reasoning as
+// `?god` in `GameState.js`, which this borrows its shape from: a URL
+// parameter, read once at module scope, off unless asked for.
+//
+// It does NOT stop the clock or skip the timer, so a run started this way is
+// still timed -- it is a shortcut past the catch, not a sandbox.
+const SKIP_CATCH_PARAM = 'deliver';
+const skipCatch = new URLSearchParams(window.location.search).has(SKIP_CATCH_PARAM);
+
+/**
+ * Whether the run opened straight into delivery.
+ *
+ * Read by `main.js`, which turns god mode on for it. The flag lives here
+ * because this is the module that owns the catch it skips, and god mode is
+ * switched on from there because `GameState.js` imports nothing and must not
+ * learn what a gift is -- the same discipline the win state is specified
+ * around.
+ */
+export function isCatchSkipped() {
+  return skipCatch;
+}
+
 export const gifts = [];
 
 const clock = new THREE.Clock();
@@ -150,7 +177,7 @@ const clock = new THREE.Clock();
 // `gltf.scene.clone()` shares the geometry so it uploads once.
 let template = null;
 
-let caught = 0;
+let caught = skipCatch ? GIFT_TOTAL : 0;
 // Starts at the full gap so the first gift appears on the first frame the
 // sleigh and the model are both ready, rather than 1.5 seconds into the run.
 let timeSinceCatch = SPAWN_GAP;
@@ -160,12 +187,24 @@ let countElement = null;
 // counter in the same column.
 const DEFAULT_LABEL = 'Gifts';
 let countLabel = DEFAULT_LABEL;
+// What the counter counts, when it is not counting catches. Null while this
+// phase owns it.
+//
+// The spec for `gift_delivery` asked only for a relabel, on the reading that
+// the counter is "the one gift_catch already owns". It is -- but by the time
+// the label changes, `caught` is five, so a relabel alone would open the
+// delivery phase reading `Delivered 5 / 5`. The denominator is shared; the
+// numerator is not.
+let countOverride = null;
+// Whether `?deliver`'s full sack has been put on the carriage yet. One-shot
+// per run; see `updateGifts`.
+let sackFilled = false;
 let renderedText = null;
 
 function renderCount() {
   if (!countElement) return;
 
-  const text = `${countLabel} ${caught} / ${GIFT_TOTAL}`;
+  const text = `${countLabel} ${countOverride ?? caught} / ${GIFT_TOTAL}`;
 
   // The loop calls this every frame, so skip DOM writes that change nothing.
   if (text === renderedText) return;
@@ -174,10 +213,42 @@ function renderCount() {
   countElement.textContent = text;
 }
 
-/** Relabels the counter without disturbing the count. For `gift_delivery`. */
-export function setGiftCountLabel(label) {
+/**
+ * Relabels the counter, and optionally counts something else.
+ *
+ * For `gift_delivery`, which owns the second phase's numerator but not the
+ * element. Called with no count it is a relabel and the catches are still what
+ * is shown, which is what the delivery spec asked for and is kept because a
+ * caller that only wants the label should not have to pass a number.
+ */
+export function setGiftCountLabel(label, count = null) {
   countLabel = label;
+  countOverride = count;
   renderCount();
+}
+
+/**
+ * A standalone copy of the present: the cloned model at MODEL_SCALE, tipped
+ * the quarter turn every loaded model gets, ready to be added to a scene.
+ * Null until the glTF is in.
+ *
+ * `gift_delivery` drops and delivers the same box this phase catches, and the
+ * alternative is a second GLTFLoader call for a 3.5 MB file this module has
+ * already parsed and whose 123,440 triangles are already uploaded. Returns the
+ * box alone and not the group `spawnGift` builds: a dropped gift falls, and
+ * there is no parachute on it.
+ */
+export function createGiftBox() {
+  if (!template) return null;
+
+  const box = template.clone();
+
+  box.scale.setScalar(MODEL_SCALE);
+  // As in `spawnGift`: with rotation.x set first the model's local Y is world
+  // Z, which is what makes `box.rotation.y` the spin about the up axis.
+  box.rotation.x = Math.PI / 2;
+
+  return box;
 }
 
 /**
@@ -203,6 +274,12 @@ export function initGifts() {
       console.error('Gift model failed to load', error);
     },
   );
+
+  if (skipCatch) {
+    console.info(
+      `Gifts: ?${SKIP_CATCH_PARAM} -- opening with ${GIFT_TOTAL} gifts in the sack`,
+    );
+  }
 
   // Every timed system here does this. The wall time spent loading a 3.5 MB
   // model otherwise gets paid out on the first frame.
@@ -336,13 +413,13 @@ function onCatch(scene, gift, player) {
   // what makes the sleigh look loaded for the flight to town.
   setSackFull(player, true);
 
-  // **Placeholder stop.** The theme is how fast Santa can collect AND deliver,
-  // so the clock should stop on the fifth delivery -- which is
-  // `allDelivered()` in `gift_delivery/spec.md`, and the run's real end is
-  // `conclusion/win_state/spec.md`. Neither exists yet, so the fifth catch is
-  // the last thing the game currently has to say and the clock stops there.
-  // Moving this is one line in each file when delivery lands.
-  stopTimer();
+  // **No `stopTimer()` here any more.** It was a placeholder for the run's
+  // end while the fifth catch was the last thing the game had to say; the
+  // delivery phase exists now, and the Game Over screen shows the time, so
+  // stopping the clock here would have reported the flight to town and the
+  // five drops as taking no time at all. The real stop is the fifth delivery
+  // -- `allDelivered()` -- which belongs to `conclusion/win_state/spec.md`
+  // along with the ending it announces.
 }
 
 function driftGift(gift, delta) {
@@ -380,14 +457,19 @@ export function resetGifts(scene, player) {
   gifts.forEach((gift) => scene.remove(gift));
   gifts.length = 0;
 
-  caught = 0;
+  // A restart under `?deliver` is the delivery phase again, not the catch:
+  // the flag is what the run IS, so a reset that put five gifts back in the
+  // air would make the shortcut good for one run only.
+  caught = skipCatch ? GIFT_TOTAL : 0;
   timeSinceCatch = SPAWN_GAP;
   // Back to `Gifts` even if `gift_delivery` had moved it on to `Delivered`: a
-  // restart is the catching phase again.
+  // restart is the catching phase again, and the numerator is the catches
+  // again with it.
   countLabel = DEFAULT_LABEL;
+  countOverride = null;
   renderCount();
 
-  if (player) setSackFull(player, false);
+  if (player) setSackFull(player, skipCatch);
 
   // Throw away the time the Game Over screen was up, so the first gift of the
   // new run starts its fall from where it spawned.
@@ -410,6 +492,15 @@ export function updateGifts(scene, player) {
   // models are in; a catch test against a sleigh still at the construction
   // default is a catch at the wrong place.
   if (!player.ready || !template) return;
+
+  // The one thing `?deliver` cannot do at init: `setSackFull` is a no-op until
+  // both sacks are loaded, and this is the first frame they are. A one-shot
+  // rather than a line in `onCatch`, because with the catch skipped `onCatch`
+  // is never called at all.
+  if (skipCatch && !sackFilled) {
+    sackFilled = true;
+    setSackFull(player, true);
+  }
 
   // Only one gift exists at a time. The story asks for it ("one after the
   // other"), it caps a 123,440-triangle model at one instance on screen, and

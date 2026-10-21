@@ -107,6 +107,165 @@ body {
   opacity: 0.85;
 }
 
+/* The run's time, under the reason. The biggest thing on the screen after the
+   word "Over", and white rather than gold: the reason above it is already
+   gold, because it is the line the player has to read to learn the rule they
+   just broke, and two golds one above the other is two headlines. The size
+   does the ranking instead. */
+.game-over .result {
+  margin-top: 4px;
+  font-size: 34px;
+  /* So the digits do not jostle as the tenths change on the frame it lands. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+  opacity: 1;
+}
+
+/* The other ending. `conclusion/win_state/spec.md`: the overlay carries both
+   classes, so everything above still applies and only what has to change
+   changes.
+
+   Lighter than the Game Over screen's 0.75, because the whole point of this
+   one is that the town behind it is lit -- hiding the thing the ending is
+   made of would leave a dark box saying the town came on. The spec's 0.45,
+   with the text shadow it says to reach for first if the wording stops
+   reading at that. */
+.game-over.win {
+  background: rgba(6, 11, 24, 0.45);
+  text-shadow: 0 2px 12px rgba(6, 11, 24, 0.9);
+  /* Starts after the lights have begun climbing and lands exactly as they
+     reach full: ChristmasLights.js takes CELEBRATE_SECONDS = 1.6 to bring the
+     town up, and 0.4 + 1.2 is the same moment. The town answers first and the
+     overlay agrees with it, rather than the two arriving together and the
+     player reading the wording instead of watching the village. */
+  animation: win-in 1.2s ease 0.4s both;
+}
+
+@keyframes win-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Gold, where Game Over is white: the one place in the game where the title
+   of a screen is good news. */
+.game-over.win h1 {
+  color: #ffd964;
+}
+
+/* Brighter than on the Game Over screen, where the dimming does the work.
+   Here the bottom half of what is behind the menu is lit snow, and 0.55 white
+   over it is unreadable. The `.selected` row is listed again because the rule
+   above it would otherwise outrank the one that makes a selection look
+   selected. */
+.game-over.win .menu-item {
+  opacity: 0.78;
+}
+
+.game-over.win .menu-item.selected {
+  opacity: 1;
+}
+
+.game-over.win .menu-hint {
+  opacity: 0.72;
+}
+
+/* Under the time, and only present when the run was a record. Small, because
+   it is a remark rather than the result. */
+.game-over .best {
+  margin-top: 6px;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #ffd964;
+  opacity: 1;
+}
+
+/* The keyboard menu, shared by both screens. No hover and no cursor: these
+   rows are driven by Up / Down and Enter, and a row that lights up under the
+   mouse but cannot be clicked is a promise the screen does not keep. */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 28px;
+}
+
+.menu-item {
+  position: relative;
+  /* The gutter the candy stands in, reserved on every row -- otherwise
+     moving the selection shifts the whole list sideways. Matched on the right
+     so the label itself stays on the centre line of the screen rather than
+     being pushed off it by the selector. */
+  padding: 8px 56px;
+  font-size: 26px;
+  letter-spacing: 1px;
+  opacity: 0.55;
+}
+
+/* `opening_scene.md` asks for "Christmas candy as option selector", and this
+   is it: a candy cane, drawn as one stroked path in white with a second
+   dashed red stroke over the top of it for the stripes. Inline rather than a
+   file in public/ because it is 300 bytes and belongs to this rule -- and
+   because a selector that has to be fetched is a selector that can arrive
+   after the first keypress.
+
+   On every row and hidden rather than only on the selected one, so the
+   browser has it decoded before the first Down. */
+.menu-item::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  width: 22px;
+  height: 40px;
+  margin-top: -20px;
+  opacity: 0;
+  background: center / contain no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 44'%3E%3Cg fill='none' stroke-linecap='round' stroke-width='7'%3E%3Cpath d='M16 38V15C16 8 6 8 6 15' stroke='%23ffffff'/%3E%3Cpath d='M16 38V15C16 8 6 8 6 15' stroke='%23e3272f' stroke-dasharray='4 7'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.menu-item.selected {
+  background: rgba(255, 217, 100, 0.12);
+  color: #ffd964;
+  opacity: 1;
+}
+
+.menu-item.selected::before {
+  opacity: 1;
+  /* A small bob, so the candy reads as pointing at the row rather than as
+     part of it. Transform only -- this runs behind a menu the player is
+     looking straight at. */
+  animation: candy-bob 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes candy-bob {
+  from {
+    transform: translateY(-2px) rotate(-6deg);
+  }
+  to {
+    transform: translateY(2px) rotate(6deg);
+  }
+}
+
+/* Both screens listed rather than a bare `.menu-hint`: `.game-over p` and
+   `.title-centre p` are each one class plus one element, which outranks a
+   single class whatever the order, and this line would otherwise come out at
+   the reason's 24px. */
+.game-over .menu-hint,
+.title-centre .menu-hint {
+  margin-top: 24px;
+  /* Smaller than anything else on the screen on purpose: it is read once, by
+     a player who does not yet know the menu is keyboard-driven, and never
+     again. */
+  font-size: 15px;
+  letter-spacing: 1px;
+  opacity: 0.5;
+}
+
 .god-mode {
   position: fixed;
   top: 12px;
@@ -348,4 +507,341 @@ body {
      glance without having to judge the length of a 120px bar. */
   opacity: 0.35;
   filter: none;
+}
+
+.delivery-hint {
+  /* Bottom centre, in the `.mouse-hint` pill -- same padding, same radius,
+     same background, same letter-spacing -- because it is the same kind of
+     thing: an instruction to act on, not a status to glance at. It sits one
+     row ABOVE that hint rather than in the badge column top-left, and above
+     rather than on it so the two can be up at once: Escape hands the mouse
+     back mid-delivery and shows the click hint, and neither message should be
+     the one that gets covered.
+
+     In the doorstep discs' gold, which is also the Game Over reason line's,
+     so the key and the circles on the snow read as one cue. */
+  position: fixed;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #ffd964;
+  user-select: none;
+  /* Like every other readout: the canvas needs its clicks for pointer lock. */
+  pointer-events: none;
+}
+
+.delivery-hint.visible {
+  display: block;
+  /* Fades up rather than snapping on. It appears on the frame the fifth gift
+     is caught, which is already a busy one -- a chime, a smile, the sack
+     filling and five discs lighting up on the snow -- and a line of text
+     arriving instantly in the middle of that is the one of the five that reads
+     as a glitch. `display` cannot be transitioned, which is why the animation
+     is here and not a transition on the rule above. */
+  animation: delivery-hint-in 0.4s ease both;
+}
+
+@keyframes delivery-hint-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+   The title screen -- `hackathon/opening_scene.md`.
+
+   Painted in the page over an opaque backdrop rather than shown through to
+   the scene: the reasoning is in TitleScreen.js's header. Opaque is also what
+   lets the HUD stay where it is -- the clock, the counter and the boost bar
+   are all behind this, and none of them needs to know the screen exists.
+
+   The palette is the game's: Sky.js's zenith 0x060b18 and horizon 0x1d2b47
+   for the night, Aurora.js's 0x3cf0a0 and 0x7a4cff for the band, and the
+   frog's own 0xe3272f / 0x21d789 / 0xf2c14e for everything drawn.
+   --------------------------------------------------------------------------- */
+.title-screen {
+  /* Kept in the DOM and toggled, like every other screen here. */
+  display: none;
+  position: fixed;
+  inset: 0;
+  /* Above the HUD and above the Game Over overlay, neither of which sets a
+     z-index -- so this is the one rule in the file that has to, rather than
+     leaving which screen wins to the order the modules happen to init in. */
+  z-index: 20;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(#060b18 0%, #0d1730 46%, #1d2b47 100%);
+  font-family: system-ui, sans-serif;
+  color: #ffffff;
+  text-align: center;
+  user-select: none;
+}
+
+.title-screen.visible {
+  display: flex;
+}
+
+/* The aurora, blurred into the gradient the way the real one sits over the
+   mountains. Two stops and a slow drift; anything more detailed competes with
+   the title, which is the thing on this screen that has to be read. */
+.title-aurora {
+  position: absolute;
+  top: 6%;
+  left: -15%;
+  width: 130%;
+  height: 34%;
+  background: linear-gradient(
+    102deg,
+    transparent 8%,
+    rgba(60, 240, 160, 0.26) 32%,
+    rgba(122, 76, 255, 0.22) 58%,
+    transparent 86%
+  );
+  filter: blur(34px);
+  animation: title-aurora-drift 19s ease-in-out infinite alternate;
+}
+
+@keyframes title-aurora-drift {
+  from {
+    transform: translateX(-3%) skewX(-4deg);
+  }
+  to {
+    transform: translateX(3%) skewX(4deg);
+  }
+}
+
+/* The snow Tode came down in. Curved along the top so the horizon is a drift
+   rather than a ruled line. */
+.title-ground {
+  position: absolute;
+  left: -4%;
+  bottom: 0;
+  width: 108%;
+  height: 24%;
+  border-radius: 50% 50% 0 0 / 22% 22% 0 0;
+  background: linear-gradient(#eaf1fb, #c9d8ef);
+}
+
+/* The storm: the sack and five gifts crossing the screen, and the funnel that
+   is taking them. Behind the title and in front of the sky. */
+.title-storm {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.title-tornado {
+  position: absolute;
+  right: 3vw;
+  /* Standing on the snow rather than hanging in the sky: the drift curves up
+     to about 22vh on that side of the screen. */
+  bottom: 19vh;
+  width: clamp(140px, 18vw, 250px);
+  /* Pinned at the point, which is what it is standing on. */
+  transform-origin: 50% 100%;
+  animation: title-tornado-sway 6.5s ease-in-out infinite alternate;
+}
+
+/* The churn: each ring stretches and settles on its own clock, slowest at the
+   wide end. `fill-box` so the origin is the ring rather than the whole
+   drawing, which would swing them sideways instead of breathing them. */
+.title-tornado ellipse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: title-tornado-churn 2.8s ease-in-out infinite alternate;
+}
+
+.title-tornado ellipse:nth-of-type(2) {
+  animation-duration: 2.3s;
+  animation-delay: -0.4s;
+}
+
+.title-tornado ellipse:nth-of-type(3) {
+  animation-duration: 1.9s;
+  animation-delay: -0.9s;
+}
+
+.title-tornado ellipse:nth-of-type(4) {
+  animation-duration: 1.5s;
+  animation-delay: -1.3s;
+}
+
+.title-tornado ellipse:nth-of-type(5) {
+  animation-duration: 1.2s;
+  animation-delay: -1.7s;
+}
+
+@keyframes title-tornado-churn {
+  from {
+    transform: scaleX(0.9) translateX(-3px);
+  }
+  to {
+    transform: scaleX(1.08) translateX(3px);
+  }
+}
+
+.title-tornado svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@keyframes title-tornado-sway {
+  from {
+    transform: rotate(-4deg) scaleX(0.95);
+  }
+  to {
+    transform: rotate(4deg) scaleX(1.05);
+  }
+}
+
+/* One lane per item. Everything that differs between them -- where it
+   crosses, how fast, how big, which way it tumbles -- is a custom property
+   set in TitleScreen.js, so this is one animation rather than six. */
+.storm-item {
+  position: absolute;
+  top: var(--top);
+  left: -14vw;
+  animation: title-storm-cross var(--seconds) linear var(--delay) infinite;
+}
+
+/* Carried up as well as across: the storm is taking them away, not delivering
+   them. Transform only, so the whole screen stays on the compositor. */
+@keyframes title-storm-cross {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(128vw, -24vh, 0);
+  }
+}
+
+.storm-spin {
+  width: calc(64px * var(--scale));
+  animation: title-storm-spin var(--spin) linear infinite var(--spin-dir);
+}
+
+.storm-spin svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@keyframes title-storm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Tode and the sleigh, down in the snow at the bottom left. */
+.title-tode {
+  position: absolute;
+  left: 3vw;
+  bottom: 1vh;
+  z-index: 2;
+  width: clamp(190px, 23vw, 320px);
+}
+
+.title-portrait {
+  position: relative;
+  display: block;
+  width: 62%;
+  margin-left: 8%;
+  /* Slumped. The artwork has one expression -- a straight black line of a
+     mouth -- so "sad Tode" is in the posture and the tear below, which is
+     what a flat character has instead of a face full of morph targets. */
+  transform: rotate(-5deg);
+  filter: drop-shadow(0 8px 10px rgba(6, 11, 24, 0.45));
+}
+
+/* Behind him and nose-down, where it came in. */
+.title-sleigh {
+  position: absolute;
+  right: -22%;
+  bottom: 4%;
+  width: 92%;
+  transform: rotate(-13deg);
+  filter: drop-shadow(0 6px 8px rgba(6, 11, 24, 0.4));
+}
+
+.title-sleigh svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* One tear, every few seconds, rather than a stream: a frog crying steadily
+   on the title screen is a different game. */
+.title-tear {
+  position: absolute;
+  /* Under his left eye, not on it: the eyes are black rounded squares and a
+     blue dot inside one reads as a highlight rather than as a tear. */
+  left: 20%;
+  top: 50%;
+  width: 9px;
+  height: 12px;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: #7fd4ff;
+  opacity: 0;
+  animation: title-tear-fall 5.5s ease-in infinite;
+}
+
+@keyframes title-tear-fall {
+  0%,
+  58% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  64% {
+    opacity: 0.9;
+  }
+  96% {
+    transform: translateY(42px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(42px);
+    opacity: 0;
+  }
+}
+
+/* The title and the menu, in the middle, over everything. */
+.title-centre {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Lifted off centre by about the height of the menu, so the title sits on
+     the middle line and the options hang under it rather than the pair being
+     centred as a block. */
+  margin-bottom: 6vh;
+}
+
+.title-centre h1 {
+  margin: 0;
+  font-size: clamp(42px, 8vw, 104px);
+  letter-spacing: 3px;
+  color: #ffd964;
+  text-shadow: 0 0 28px rgba(255, 217, 100, 0.35), 0 6px 0 rgba(6, 11, 24, 0.5);
+}
+
+.title-centre p {
+  margin: 0;
+  font-size: 20px;
+  opacity: 0.8;
+}
+
+.title-centre .tagline {
+  margin-top: 10px;
+  letter-spacing: 1px;
 }
