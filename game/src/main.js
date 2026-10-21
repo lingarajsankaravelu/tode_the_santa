@@ -37,6 +37,7 @@ import { updateDifficulty } from './components/Difficulty.js';
 import { createMap } from './components/Map.js';
 import { createHouses, houses } from './components/House.js';
 import { createSnow, updateSnow } from './components/Snow.js';
+import { createAurora, updateAurora } from './components/Aurora.js';
 import { updateChristmasLights } from './components/ChristmasLights.js';
 import { updateSmoke } from './components/Smoke.js';
 import { initMusic } from './components/Music.js';
@@ -83,6 +84,13 @@ player.add(camera);
 // him to follow.
 const snow = createSnow();
 scene.add(snow);
+
+// Next to the snow, and on the scene for the same reason: the shell stands
+// 2600 units out over the +Y mountains, and parenting it to the player would
+// leave it the one object in the world with no parallax. Nothing reads it
+// against Tode, so order here does not matter.
+const aurora = createAurora();
+scene.add(aurora);
 
 // Hangs off the scene next to the snow, not off the player: it stands on the
 // ground at the gift's position, which has nothing to do with where the sleigh
@@ -171,6 +179,10 @@ renderer.setAnimationLoop(() => {
   // Also outside it: the snow carries on over the Game Over screen, the
   // same way the lighting stays up rather than cutting to black.
   updateSnow(snow, player);
+  // And outside it with the snow: the sky does not stop because the run
+  // ended, and a band of aurora freezing on the Game Over frame would read as
+  // part of the failure.
+  updateAurora(aurora);
   // Outside the freeze for the same reason, and because a town going dark on
   // the Game Over frame would read as the lights being part of the failure.
   // No argument: all five plots share one buffer, so this is one pass for the
