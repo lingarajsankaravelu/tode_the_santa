@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createLandscape } from './Landscape.js';
 import { createSnowRoads } from './SnowRoads.js';
+import { createAirstrip } from './Airstrip.js';
 
 /**
  * Builds the ground. Returns a Group rather than the landscape itself,
@@ -22,6 +23,11 @@ export function createMap() {
   // rather than by insertion, so what actually keeps the road on top of the
   // ground is the polygonOffset and the 0.04 lift in SnowRoads.js.
   map.add(createSnowRoads());
+  // The aerodrome under the mountains, past the last house. Scenery standing
+  // on the ground rather than ground itself, like the roads and the town: it
+  // is here rather than in main.js because it is part of the place the map
+  // is, and moving the map should carry it along.
+  map.add(createAirstrip());
 
   return map;
 }

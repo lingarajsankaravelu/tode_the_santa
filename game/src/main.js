@@ -80,6 +80,7 @@ import {
   resetChristmasLights,
 } from './components/ChristmasLights.js';
 import { updateSmoke } from './components/Smoke.js';
+import { updateAirstrip } from './components/Airstrip.js';
 import { initMusic } from './components/Music.js';
 import { createSkyTexture, HORIZON_COLOR } from './components/Sky.js';
 import { createLighting } from './components/Lighting.js';
@@ -320,6 +321,10 @@ renderer.setAnimationLoop(() => {
   // stopping halfway round.
   updateCamera(camera, player);
 
+  // Outside the freeze with the town's strings, and for the same reason: the
+  // runway sequence stopping on the Game Over frame would read as the
+  // aerodrome going down with Tode. No argument -- there is one airfield.
+  updateAirstrip();
   // Also outside it: the snow carries on over the Game Over screen, the
   // same way the lighting stays up rather than cutting to black.
   updateSnow(snow, player);

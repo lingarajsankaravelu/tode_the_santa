@@ -198,8 +198,11 @@ const clock = new THREE.Clock();
  * through. A bulb has a bright centre and a tight falloff, and the difference
  * is what licenses a 7-unit sprite for a physically 2-inch lamp: the sprite is
  * the glow, and only the core is the bulb.
+ *
+ * Exported for Airstrip.js, whose runway lamps, beacon and garland are the
+ * same glow at three other sizes.
  */
-function createBulbTexture() {
+export function createBulbTexture() {
   const size = 32;
   const canvas = document.createElement('canvas');
 
