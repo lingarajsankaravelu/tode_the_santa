@@ -1,33 +1,52 @@
 ### Specification for AI agent: Gift catching
 
-> **Rewritten for flight.** An earlier pass of this spec had Tode hopping
-> under falling gifts, with the catch resolved by a vertical reach band
-> around a 25-unit hop arc. The game no longer works that way: Tode and his
-> sack ride the sleigh for the whole run, and the hop is gone. See
-> `skeleton/sleigh/spec.md`, which owns the flight model and is a
-> **prerequisite for this task** — none of the numbers below mean anything
-> until it lands.
+> **Second revision, and this one is against shipped code.** The first draft
+> had Tode hopping under falling gifts. The second was rewritten for flight
+> while flight was still a spec, and it guessed one number wrong in a way that
+> runs through the whole document: it assumed a hard floor of
+> `MIN_ALTITUDE = 100`, and reasoned from it four separate times.
 >
-> What survived the rewrite, because it was never about hopping: five gifts,
-> one in the air at a time, `Enemies.js` as the structural pattern, a
-> `Score.js`-style counter, burning the delta on init and reset, and a run
-> that cannot become unwinnable.
+> **There is no such constant.** `skeleton/sleigh` is implemented now and the
+> sleigh lands. The floor is `restAltitude = 12.42` over open snow, rising to
+> `HOUSE_RIDGE + restAltitude = 92.42` over an occupied plot, and `Q`/`E` take
+> the sleigh between the snow and the ceiling at 400. Everything below has
+> been re-derived from the constants in `Movement.js` as it stands.
+>
+> What survived all three passes, because none of it was ever about the floor:
+> five gifts, one in the air at a time, `Enemies.js` as the structural
+> pattern, a `Score.js`-style counter, burning the delta on init and reset,
+> and a run that cannot become unwinnable.
 
 The first phase of the story: the storm has taken Tode's gifts and is holding
 them up there. He flies after them and catches all five.
 
-#### The gifts never land, and that is the design
+#### Prerequisite
+
+`skeleton/sleigh/spec.md`, **implemented and merged**. The numbers this spec
+reads from it:
+
+| From `Movement.js` | Value |
+|---|---|
+| `CRUISE_SPEED` | 200 |
+| `LIFT_SPEED` | 120 |
+| `HOUSE_RIDGE` | 80 |
+| `MAX_ALTITUDE` | 400 |
+| `START_ALTITUDE` | 200 |
+| `WORLD_RADIUS` | 700 |
+| `player.restAltitude` (from `Player.js`) | 12.42 |
+| `player.collisionRadius` (from `Player.js`) | 37.10 |
+
+#### The gifts never land, and that is still the design
 
 The storm will not let them fall — the story says so, and `opening_scene.md`
-has them "swirling across the screen with cute tornado". That is not just
-flavour, it is what makes the phase safe.
+has them "swirling across the screen with cute tornado".
 
-With flight the floor is `MIN_ALTITUDE = 100`, which is what keeps the sleigh
-clear of the 80-unit house ridges without any scenery collision. A gift that
-fell past 100 would be permanently out of reach, and with no fail state in
-the game there is nothing to lose the run *to* — it would simply be a dead
-end. So gifts hover, bob and drift, and the only way to miss one is to not go
-and get it.
+The old reasoning for this was that a gift below the hard floor would be
+permanently out of reach. That reason is gone: the sleigh can now be put on
+the snow, so a gift lying in a field would simply be driven to. The rule
+stays anyway, for two better reasons. It is the story. And a gift on the
+ground is a gift the player walks a 74-unit vehicle into at 200 units/sec,
+which is a collision problem this phase does not otherwise have.
 
 #### The model
 
@@ -37,8 +56,8 @@ built from 16 primitives, normals, two materials, no texture.
 | Constant | Value | Why |
 |---|---|---|
 | `MODEL_PATH` | `/models/a_gift_box.glb` | |
-| `MODEL_SCALE` | `0.038` | **8.6 wide × 11.1 tall × 8.6 deep** in world units (the 293.29 axis is Y, which is up). Bigger than the hop version's 7, because it is now judged against a 45-unit sleigh rather than a 16-unit frog, and it has to be spottable at altitude across an open field. |
-| `SPIN_SPEED` | `1.2` rad/s | About the up axis. A present turning in the wind, and it catches the light differently as it goes, which is most of what makes it visible at distance. |
+| `MODEL_SCALE` | `0.038` | **8.55 wide × 11.15 tall × 8.55 deep** in world units (the 293.29 axis is Y, which is up). Judged against a 74-unit sleigh, not a 16-unit frog, and it has to be spottable at altitude across an open field. |
+| `SPIN_SPEED` | `1.2` rad/s | About the up axis. A present turning in the wind, catching the light differently as it goes, which is most of what makes it visible at distance. |
 
 Load the file **once and clone it**, not `loader.load` per gift the way
 `Enemies.js` does. 123,440 triangles is too much to re-parse five times, and
@@ -49,21 +68,52 @@ because this game is Z-up, and position from the spawn rules below. Do **not**
 lift it by its bounding box — that step exists to rest things on the ground
 and nothing here touches the ground.
 
+`a_gift_box.glb` has no skin, so `Box3.setFromObject` is safe on it. That is
+worth saying out loud in a project where it is not safe on the sleigh.
+
 #### Where they hang
 
 | Constant | Value | Why |
 |---|---|---|
-| `GIFT_TOTAL` | `5` | The story, which now agrees with itself. One per house, so delivery needs no arithmetic of its own. |
+| `GIFT_TOTAL` | `5` | The story. One per house, so delivery needs no arithmetic of its own. |
 | `MIN_RADIUS` | `120` | From the origin, horizontally. Closer than this and the first gift is on top of the sleigh's start. |
 | `MAX_RADIUS` | `600` | Inside `WORLD_RADIUS = 700` with 100 units of margin, so a gift is never pinned against a bound the sleigh cannot cross. |
-| `MIN_HEIGHT` | `140` | 40 clear of the `MIN_ALTITUDE` floor of 100. |
-| `MAX_HEIGHT` | `360` | 40 under the `MAX_ALTITUDE` ceiling of 400. |
+| `MIN_HEIGHT` | `140` | **Re-derived.** See below — this is the one number the missing floor really moved. |
+| `MAX_HEIGHT` | `360` | 40 under the ceiling at 400. |
 | `SPAWN_GAP` | `1.5` sec | Between one gift being caught and the next appearing. |
 
 Pick the angle over the full circle, the radius in the band, and **the height
 independently of both**. Spreading them across 140–360 is what makes climbing
 and descending part of the game rather than decoration — it is the axis the
-flight model's slower `LIFT_SPEED` was tuned for.
+slower `LIFT_SPEED` of 120 was tuned for. Crossing that band costs 2.6
+seconds at full lift, against the 3 seconds it takes to fly 600 units.
+
+##### Why `MIN_HEIGHT` is still 140, for a completely different reason
+
+The old justification was "40 clear of the floor at 100". The floor over open
+snow is 12.42, so by that argument 140 is now 128 units of wasted headroom and
+the gifts could hang much lower.
+
+They must not, and the reason is the floor that is *not* flat. Over an
+occupied plot `floorFor` returns `HOUSE_RIDGE + restAltitude = 92.42`, and
+below that height `Movement.js` blocks horizontally against the house. A
+house's own radius is 45.7 — up to about 65 when its yaw puts the axis-aligned
+box at a diagonal — so with the sleigh's 37.10 and the 8-unit clearance the
+keep-out disc around a house centre runs **90.8 to 110.1 units**.
+
+A gift hanging low over a plot is therefore reachable only from outside that
+disc, and the catch radius is 49. Put a gift 50 units up over a house centre
+and the nearest the sleigh can legally get is 90.8 away horizontally: the test
+can never pass, the gift can never be caught, and the run is dead with no fail
+state to end it.
+
+140 with a 14-unit bob bottoms out at **126**, which is 33.6 clear of the
+92.42 ceiling-of-the-floor. Above that height the keep-out disc does not
+apply at all — `canHitScenery` is false — so the sleigh can sit directly over
+a chimney. **This is the constraint that replaces the old floor, and it is a
+hard one: `MIN_HEIGHT - BOB_AMPLITUDE` must stay above 92.42.** Anyone
+lowering `MIN_HEIGHT` has to either keep that margin or exclude the five plots
+from the spawn circle, and the margin is much cheaper.
 
 Only one gift exists at a time. The story asks for it ("one after the other"),
 and it also caps a 123,440-triangle model at one instance on screen.
@@ -72,19 +122,20 @@ Each gift also drifts, so it is a moving target rather than a waypoint:
 
 | Constant | Value | Why |
 |---|---|---|
-| `BOB_AMPLITUDE` | `14` units | Vertical, about its spawn height. Well inside the 40-unit margins above and below, so a bobbing gift can never cross the flight limits. |
+| `BOB_AMPLITUDE` | `14` units | Vertical, about its spawn height. Inside the margins above and below, so a bobbing gift crosses neither the ceiling nor the 92.42 line. |
 | `BOB_PERIOD` | `3.2` sec | Slow enough to lead, fast enough to notice. |
-| `DRIFT_SPEED` | `18` units/sec | A slow horizontal wander, re-aimed every few seconds. Under a tenth of the sleigh's 200 cruise, so it is a nudge, never a chase. |
+| `DRIFT_SPEED` | `18` units/sec | A slow horizontal wander, re-aimed every few seconds. Under a tenth of the 200 cruise, so it is a nudge, never a chase. |
 
-Clamp the drift to `MAX_RADIUS` so a gift cannot wander out of the world.
+Clamp the drift to `MAX_RADIUS` so a gift cannot wander out of the world. The
+drift is horizontal only — if it ever gains a vertical term, that term has to
+respect the 92.42 line too.
 
 #### The catch test
 
 **`Collision.js` cannot do this one.** Its `wouldCollide` measures both bodies
-as circles on the ground plane and knows nothing about Z — which was right for
-a game where everything stood on the floor, and is wrong now that the whole
-phase happens at altitude. A 2D test would let the sleigh collect a gift 200
-units below it.
+as circles on the ground plane and knows nothing about Z. It is in the flight
+model now, but only for scenery below the ridge, and widening it to gifts
+would put a vertical term into a module whose whole job is the ground plane.
 
 Use a straight 3D distance between the sleigh's position and the gift's:
 
@@ -94,11 +145,14 @@ Math.hypot(gift.x - player.x, gift.y - player.y, gift.z - player.z) < CATCH_RADI
 
 | Constant | Value | Why |
 |---|---|---|
-| `CATCH_RADIUS` | `49` | **Revised.** This was 34, from a sleigh 45 long with a half-extent of 22.5 at the nose. `MODEL_SCALE` is 16 now and the sleigh is 74.2 long, so the nose reaches 37.1; the gift is about 5.5, and 49 keeps the same ~6 units of slack the original figure was chosen for. Generous enough that a near miss at 200 units/sec still counts, tight enough that you have to aim. |
+| `CATCH_RADIUS` | `49` | The sleigh is 74.2 long, so its nose reaches 37.1 from `player.position`; the gift is about 5.5 from its own centre to a corner. 49 leaves roughly 6 units of slack — generous enough that a near miss at 200 units/sec still counts, tight enough that you have to aim. |
 
-Do not add an altitude term to `Collision.js` for this. That module is for
-things standing on the ground, and the delivery phase will still want it that
-way.
+The sleigh is 2.8 times longer than it is wide, and this test is a sphere. A
+gift taken 40 units off the beam counts as caught while visibly beside the
+sleigh rather than in it. That is the correct trade for a catching game and is
+the same call `Player.js` makes when it uses the half-length for
+`collisionRadius`: be generous lengthwise, and accept that the generosity is
+isotropic.
 
 #### On a catch
 
@@ -114,6 +168,10 @@ way.
 - Award points. `Score.js` still exports `addKillScore` with no caller since
   the attack went dormant — rename it `addCatchScore` rather than adding a
   second function next to a dead one.
+- **On the fifth catch, swap the sack.** The details are in
+  `gift_delivery/spec.md`, which owns both sack models; this phase owns only
+  the moment. Doing it here rather than there is what makes the sleigh look
+  loaded for the flight to town.
 
 #### The counter
 
@@ -142,36 +200,24 @@ a remove that mutates safely while iterating.
 - **Burn `clock.getDelta()` on init and on reset.** Every timed system here
   does. The wall time spent loading a 3.5 MB model otherwise gets paid out on
   the first frame, as a gift that has already drifted halfway across the map.
+- Guard on `player.ready`. `Player.js` sets it once all three of its models
+  are in, and `Movement.js` already holds its own clock still until then; a
+  catch test against a sleigh whose position is still the construction default
+  is a catch at the wrong place.
 
 #### What this does not do
 
 This spec ends at `allCaught()` returning true. The story then has Tode fly on
 to the houses and drop a present over each, which is `gift_delivery`.
 
-Two notes for whoever writes that one:
-
-- `christmas_gift_sack.glb` is **2.2821 × 2.2818 × 2.2883** and
-  `empty_christmas_sack.glb` is **1.5647 × 1.7185 × 1.5298**, both in their
-  own units. **An earlier draft of this spec said they matched to within 3%,
-  at 2.34 × 2.36 × 2.57 against 2.34 × 2.29 × 2.57. That was wrong** — those
-  were raw accessor numbers, the exact lie `game_story.md` warns about on
-  multi-node models. The full sack is 46% wider and 33% taller than the empty
-  one. That is not a problem and is arguably right, since a full sack should
-  look full, but it does mean the swap is **not** a visibility toggle at one
-  transform: the replacement has to be re-stood on the carriage floor by its
-  own box, the way `Player.js` already stands the empty one.
-  The obvious moment for the swap is the fifth catch.
-- Delivery is the one phase that has to care about the ground again, since a
-  present has to end up at a house. `MIN_ALTITUDE = 100` means the sleigh
-  cannot descend to place one, so it is a drop — which is also the only thing
-  that keeps `Collision.js` out of the flight model.
-
 #### Constraints
 
 - Gifts are not obstacles and nothing collides with them but the catch test.
-- No gift can be lost, expire, or become unreachable.
+- No gift can be lost, expire, or become unreachable. The 92.42 line above is
+  the live half of that promise.
 - No difficulty ramp. `Difficulty.js` existed to make monsters harder over a
-  run; they are gone, and five fixed gifts have no curve. Do not add a row.
+  run; they are gone, its `moveSpeed` row went with the flight model, and five
+  fixed gifts have no curve. Do not add a row.
 
 #### Research
 
@@ -181,6 +227,7 @@ geometry upload, so it should not be the thing that hurts.
 
 If the frame rate does suffer, the sleigh is the bigger target: 99,163
 triangles, on screen every frame, 51,935 of them in one mesh named after a
-polygon reduction that evidently did not go far enough. Neither of these is a
-download concern — this project runs locally — but the sleigh is paid every
-frame and the gift is not.
+polygon reduction that evidently did not go far enough. It also now carries
+two point lights and a 5-bulb sprite string from `SleighLights.js`, which is
+negligible beside the triangles but is the newest thing in the frame and
+therefore the first thing anyone will blame.
