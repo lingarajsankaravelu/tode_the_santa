@@ -11,18 +11,35 @@
 // that stopped being true the moment E was asked to land it. Collision is now
 // conditional on altitude: above the roofs there is nothing to hit and the
 // test is skipped, which is the same saving by a narrower rule.
+//
+// The world then opened up -- `WORLD_RADIUS` 700 to 1600, `MAX_ALTITUDE` 400
+// to 900, and `Terrain.js` answering where the ground is anywhere on the map.
+// What that changed is not the landing but the SURFACE: the sleigh still lands
+// on snow and slides on it, and now there is ground that is not snow to fly
+// into instead. Houses, the river, bare rock and the treetops all end the run.
 import * as THREE from 'three';
 import { isPositionFree } from './Collision.js';
 import { getCameraYaw } from './Camera.js';
-import { isGameOver } from './GameState.js';
+import { isGameOver, isGodMode, triggerGameOver } from './GameState.js';
+import { crashFloorAt, isLandableAt, landingSurfaceAt } from './Terrain.js';
+import { updateBoost, boostThrust, BOOST_MULTIPLIER } from './Boost.js';
 
-// How far from the origin the sleigh may get, horizontally. Unchanged, and
-// deliberately so: it is tempting to lift it now that height is available --
-// the bound existed because Tode was pinned at z = 0 and the ground rises
-// outside the basin -- but nothing in this project samples terrain height,
-// and river_landscape.glb is a mesh rather than a heightfield. Flying out
-// over the hills needs a height query written first.
-const WORLD_RADIUS = 700;
+// How far from the origin the sleigh may get, horizontally. **Up from 700,
+// which was never a game-design number**: it was the radius of the
+// landscape's flat basin, the one region where "the ground is at z = 0" holds.
+// The note that used to sit here said the bound could only be lifted once
+// something sampled terrain height. `Terrain.js` now does, so it is lifted.
+//
+// 1600 and not 2300. The landscape is a SQUARE 3280 units across, so its far
+// corner stands 2319 out but its nearest edge is only 1640 -- a circular bound
+// past 1640 would put the sleigh over empty space along the axes while the
+// corners were still in frame. 1600 is the largest circle that stays over
+// ground, with 40 units of margin.
+//
+// It also keeps the mountains out of play. The generator puts them at a radius
+// of 1702 to 1927, which is beyond this bound, so the 21 of them never need a
+// collider -- the only thing out there the height field cannot see.
+const WORLD_RADIUS = 1600;
 
 // Extra turn applied to the model because snow_sleigh.glb does not face +Y.
 // It faces +X, measured rather than guessed: the carriage body sits at the
@@ -42,8 +59,23 @@ const CRUISE_SPEED = 200;
 // vehicle rather than a cursor, little enough that catching a gift is not a
 // planning exercise.
 const ACCELERATION = 420;
+// What the boost does to both of the two numbers above. Shift raises the top
+// speed AND the shove that gets there -- a boost that lifted the ceiling
+// without lifting the acceleration would take over two seconds to show up,
+// which is most of the tank spent before anything happened.
+//
+// `Boost.js` owns the multiplier, the tank it comes out of and the key; this
+// file only blends between cruise and boosted along `boostThrust()`.
+const BOOST_ACCELERATION_MULTIPLIER = 2.1;
 // Coasts to a near stop in about a second and a half once the keys go.
 const DRAG = 2.2;
+// The same curve on the ground, and much weaker: the sleigh is on runners, and
+// runners on snow are the lowest-friction thing in the story. 0.5 against the
+// air's 2.2 means a glide of about six seconds from cruise rather than one and
+// a half, so setting down with speed on carries the sleigh a long way across
+// the snowfield. It is deliberately LESS drag than the air and not more --
+// a sleigh that stopped dead on landing would be a sleigh with brakes.
+const SLIDE_DRAG = 0.5;
 // Space climbs, Shift descends. Slower than cruise on purpose: altitude is
 // the axis the gifts are spread along, so it should cost something to change.
 const LIFT_SPEED = 120;
@@ -53,9 +85,19 @@ const LIFT_SPEED = 120;
 // sleigh is measured from its CENTRE, so the comparison below adds its own
 // half-height: what has to clear a roof is its underside.
 const HOUSE_RIDGE = 80;
-// The camera sits 409 behind and 26 degrees above; past about this the ground
-// leaves the frame and the player is flying over an empty backdrop.
-const MAX_ALTITUDE = 400;
+// The ceiling. **Up from 400**, and it had to move: the old reasoning was
+// that past 400 "the ground leaves the frame and the player is flying over an
+// empty backdrop", which was true of a game whose sky was a gradient and whose
+// world was a flat disc. Both changed. `Terrain.js` measures the ground at up
+// to 575 at the far corner of the open world, so a ceiling of 400 would put
+// hillsides ABOVE the highest the sleigh could climb -- a wall rather than a
+// hill. And the empty backdrop is the thing `visual/aurora/spec.md` exists to
+// fill, which is what makes flying up there worth doing.
+//
+// 900 leaves 325 of clear air over the highest ridge -- enough to cross the
+// whole map at a safe altitude -- and is where the aurora band is specified to
+// begin.
+const MAX_ALTITUDE = 900;
 // Where a run starts. In the air rather than on the snow, so the first thing
 // the player does is fly rather than take off, and inside the 140-360 range
 // the gifts hang in so the first one is reachable without a change of
@@ -103,19 +145,23 @@ const MOVE_KEYS = {
 // is looking.
 //
 // Q and E are the documented pair -- they sit next to WASD, so a hand already
-// on the movement keys can change height without leaving them. Space and
-// Shift are kept as aliases for anyone who reaches for them first.
+// on the movement keys can change height without leaving them. Space is kept
+// as an alias for anyone who reaches for it first.
 //
 // Space being here is temporary. `core_loop/gift_delivery/spec.md` wants it
 // for the drop and `GameState.js` claims it for restart, and now that Q and E
 // exist nothing is lost by unbinding it. Left in until one of those two
 // actually needs it.
+//
+// **Shift used to descend here, and now boosts instead.** It was only ever an
+// alias -- E has done the job since the flight model landed, and the mouse
+// hint has never advertised anything but Q and E -- and hold-Shift-to-go-fast
+// is the one binding a player is most likely to try without being told. See
+// `Boost.js`.
 const CLIMB_KEYS = {
   KeyQ: 1,
   KeyE: -1,
   Space: 1,
-  ShiftLeft: -1,
-  ShiftRight: -1,
 };
 
 // Which keys are down right now. A set rather than the hop's queue: flight is
@@ -128,6 +174,10 @@ const held = new Set();
 const velocity = new THREE.Vector2();
 
 let bank = 0;
+// On the snow rather than in the air. Drives the drag the sleigh coasts
+// against and holds the bank level, and is recomputed from the altitude every
+// frame rather than being a mode the player toggles.
+let grounded = false;
 
 const clock = new THREE.Clock();
 
@@ -204,20 +254,65 @@ function desiredDirection() {
 /**
  * The lowest the sleigh's centre may go where it currently stands.
  *
- * On open snow that is its own half-height, which rests it on the ground. Over
- * a house it is the ridge, because a roof is in the way -- without this the
- * player could fly high over the town, press E, and descend straight through
- * one. The horizontal test below cannot catch that: it only refuses movement
- * ACROSS the ground, and this is movement down onto it.
+ * Three terms. Its own half-height, so the figure is where the CENTRE sits
+ * when the underside is on the deck. The terrain under it, which used to be
+ * zero everywhere the sleigh could reach and is now anything from -95 in the
+ * river channel to 575 on the far ridge. And the house ridge where a roof is
+ * in the way -- without that the player could fly high over the town, press E,
+ * and descend straight through one, which the horizontal test cannot catch
+ * because it only refuses movement ACROSS the ground.
+ *
+ * This is no longer a floor the sleigh RESTS on. Touching it is a crash; see
+ * `crashed` below. It is still computed as a floor because god mode has to
+ * clamp to something.
  */
 function floorFor(player, obstacles) {
   const rest = player.restAltitude ?? FALLBACK_REST_ALTITUDE;
+  const ground = crashFloorAt(player.position.x, player.position.y) + rest;
 
   if (isPositionFree(player, player.position.x, player.position.y, obstacles)) {
-    return rest;
+    return ground;
   }
 
-  return HOUSE_RIDGE + rest;
+  return HOUSE_RIDGE + ground;
+}
+
+/**
+ * Why the deck under the sleigh refused it, in the player's terms.
+ *
+ * Only called on the frame a landing is refused, so the extra terrain samples
+ * cost nothing -- and the alternative is a player who has to guess which of
+ * four surfaces they just touched.
+ */
+function crashReason(player, obstacles) {
+  if (!isPositionFree(player, player.position.x, player.position.y, obstacles)) {
+    return 'You came down on a roof';
+  }
+
+  switch (landingSurfaceAt(player.position.x, player.position.y)) {
+    case 'water':
+      return 'You came down in the river';
+    case 'rock':
+      return 'You came down on bare rock -- the sleigh needs snow';
+    case 'trees':
+      return 'You came down in the trees';
+    default:
+      return 'You came down hard';
+  }
+}
+
+/**
+ * Whether the deck under the sleigh is something it can set down on.
+ *
+ * Snow, and not a roof. `isLandableAt` refuses the river, bare rock and the
+ * forest; the obstacle test refuses the five plots, because over one of those
+ * the floor is the ridge rather than the ground and a sleigh arriving at it is
+ * a sleigh arriving at a roof.
+ */
+function landableUnder(player, obstacles) {
+  if (!isPositionFree(player, player.position.x, player.position.y, obstacles)) return false;
+
+  return isLandableAt(player.position.x, player.position.y);
 }
 
 /** True when the sleigh's underside is low enough to strike a house. */
@@ -241,15 +336,30 @@ function climbInput() {
  * killing the component that points out of it.
  */
 function moveHorizontally(player, direction, delta, obstacles) {
-  if (direction) {
-    velocity.x += direction.x * ACCELERATION * delta;
-    velocity.y += direction.y * ACCELERATION * delta;
+  // 0 at cruise, 1 at full boost, and smoothed -- so the ceiling and the shove
+  // both ramp up and back down rather than switching with the key. Releasing
+  // Shift above cruise is what the clamp below reads as a gentle thing: the
+  // top speed comes down over a few tenths and the excess is shed against it,
+  // instead of the sleigh being yanked back to 200 on one frame.
+  const thrust = boostThrust();
+  const topSpeed = CRUISE_SPEED * (1 + (BOOST_MULTIPLIER - 1) * thrust);
+  const acceleration = ACCELERATION * (1 + (BOOST_ACCELERATION_MULTIPLIER - 1) * thrust);
 
-    if (velocity.length() > CRUISE_SPEED) velocity.setLength(CRUISE_SPEED);
+  if (direction) {
+    velocity.x += direction.x * acceleration * delta;
+    velocity.y += direction.y * acceleration * delta;
+
+    if (velocity.length() > topSpeed) velocity.setLength(topSpeed);
   } else {
     // Exponential rather than `velocity *= 1 - DRAG * delta`, which is the
     // same curve at 60Hz and goes negative on a long frame.
-    velocity.multiplyScalar(Math.exp(-DRAG * delta));
+    velocity.multiplyScalar(Math.exp(-(grounded ? SLIDE_DRAG : DRAG) * delta));
+
+    // Boosted speed is shed against the falling ceiling here too, not only
+    // under power. On the snow SLIDE_DRAG is 0.5 -- a six-second glide -- and
+    // without this a boosted landing would keep its boosted speed for most of
+    // it with the tank long since empty.
+    if (velocity.length() > topSpeed) velocity.setLength(topSpeed);
   }
 
   let x = player.position.x + velocity.x * delta;
@@ -278,10 +388,21 @@ function moveHorizontally(player, direction, delta, obstacles) {
   // nothing in the sky, and this is the saving that the old hard floor of 100
   // used to buy outright.
   if (canHitScenery(player) && !isPositionFree(player, x, y, obstacles)) {
-    // Stopped rather than slid along. A sleigh is not a character squeezing
-    // past a wall, and the player has the whole vertical axis available to
-    // get over the thing instead.
-    velocity.set(0, 0);
+    // **This used to stop the sleigh dead.** It now ends the run: flying a
+    // 74-unit vehicle into a cottage at 200 units/sec is a crash, and an
+    // invisible wall around each house was the last thing in the flight model
+    // still treating the sleigh as a character that could be blocked.
+    //
+    // God mode keeps the old behaviour rather than getting a free pass through
+    // the wall, because the point of god mode is to fly around and look at the
+    // scenery, and passing through a roof is not looking at it.
+    if (isGodMode()) {
+      velocity.set(0, 0);
+      return;
+    }
+
+    triggerGameOver('You flew into a house');
+
     return;
   }
 
@@ -306,7 +427,8 @@ function orient(player, direction) {
 
   let target = 0;
 
-  if (direction && speed > MIN_HEADING_SPEED) {
+  // Nothing banks while its runners are on the ground.
+  if (!grounded && direction && speed > MIN_HEADING_SPEED) {
     // The z of (velocity x direction), normalised: the sine of the angle
     // between them, signed by which way round the turn goes. Positive is a
     // turn to the left, and the sleigh's right side is its local +Z, so the
@@ -328,6 +450,7 @@ export function resetMovement(player) {
   held.clear();
   velocity.set(0, 0);
   bank = 0;
+  grounded = false;
 
   player.position.set(0, 0, START_ALTITUDE);
 
@@ -343,8 +466,9 @@ export function resetMovement(player) {
 
 /**
  * `enemies` is unused and kept, so restoring the monsters is one word in
- * main.js. `obstacles` is the town, and it is used again now that E lands the
- * sleigh: below the roofs it blocks, above them it is skipped.
+ * main.js. `obstacles` is the town: below the roofs, hitting one ends the run;
+ * above them the test is skipped, which is the saving the old hard floor of
+ * 100 used to buy outright.
  */
 export function updateMovement(player, enemies = [], obstacles = []) {
   const delta = Math.min(clock.getDelta(), MAX_DELTA);
@@ -358,16 +482,58 @@ export function updateMovement(player, enemies = [], obstacles = []) {
 
   const direction = desiredDirection();
 
+  // Before `moveHorizontally`, so the thrust it reads is this frame's rather
+  // than last frame's. The boost only burns while the sleigh is being asked
+  // to go somewhere -- see `updateBoost` -- which is why the direction is
+  // handed over rather than looked up there.
+  updateBoost(delta, direction !== null);
+
   moveHorizontally(player, direction, delta, obstacles);
 
-  // Clamped every frame rather than only when a key is held, so a sleigh that
-  // is already low and crosses onto a plot is lifted clear rather than left
-  // inside a roof.
-  player.position.z = THREE.MathUtils.clamp(
-    player.position.z + climbInput() * LIFT_SPEED * delta,
-    floorFor(player, obstacles),
-    MAX_ALTITUDE,
-  );
+  // That call can end the run. Everything below writes to the sleigh, and a
+  // crashed sleigh should stay where it stopped rather than being banked,
+  // oriented and animated for one more frame.
+  if (isGameOver()) return;
+
+  // Checked every frame rather than only when a climb key is held, because
+  // most crashes are horizontal now: the sleigh holds its altitude and flies
+  // into ground that is rising under it.
+  const floor = floorFor(player, obstacles);
+  const climb = climbInput();
+  const altitude = player.position.z + climb * LIFT_SPEED * delta;
+
+  // A sleigh already on the snow and not being asked to climb STAYS on the
+  // snow, following the surface down as well as up. Without this clause the
+  // sleigh leaves the ground at the top of every dip and glides on level,
+  // because there is no gravity on the vertical axis -- altitude is driven
+  // straight off the keys -- so nothing would ever bring it back down. Q is
+  // the only way off the ground, which is what makes a slide a slide.
+  const onTheSnow = grounded && climb <= 0;
+
+  // **The floor is landable or fatal, depending on what it is made of.** The
+  // sleigh spec had E lower the sleigh onto the snow and rest it there, and
+  // that still holds -- a sleigh lands on snow and slides on it, which is what
+  // a sleigh is for. What the open world added is ground that is NOT snow:
+  // the river channel, the bare rock the snow slid off, and the forest canopy
+  // the height field cannot see into. Those are the hazards, along with the
+  // roofs. `landableUnder` is the whole of the distinction.
+  if (onTheSnow || altitude <= floor) {
+    player.position.z = floor;
+
+    if (landableUnder(player, obstacles) || isGodMode()) {
+      // Down on the snow, and staying there until Q lifts it off again. The
+      // horizontal velocity is untouched: the runners keep whatever speed
+      // arrived, and SLIDE_DRAG takes it away slowly.
+      grounded = true;
+    } else {
+      triggerGameOver(crashReason(player, obstacles));
+
+      return;
+    }
+  } else {
+    grounded = false;
+    player.position.z = Math.min(altitude, MAX_ALTITUDE);
+  }
 
   orient(player, direction);
 
@@ -376,9 +542,15 @@ export function updateMovement(player, enemies = [], obstacles = []) {
   // sprint on the spot whenever it stops. They slow as it slows and settle
   // when it settles, which is the nearest this asset gets to a standing pose:
   // there is no second clip to cut to.
-  player.animator?.setTimeScale(Math.min(velocity.length() / CRUISE_SPEED, 1));
+  // Divided by cruise and capped at the boost multiplier rather than at 1, so
+  // the four pullers visibly dig in under boost instead of saturating at
+  // cruise and leaving the push with no animation behind it.
+  player.animator?.setTimeScale(
+    Math.min(velocity.length() / CRUISE_SPEED, BOOST_MULTIPLIER),
+  );
 }
 
 // Read by Player.js so a run starts where resetMovement puts it back, and by
-// the gift specs, which pick their spawn heights against the flight band.
+// Gifts.js, which picks its spawn heights and its world clamp against the
+// flight band.
 export { START_ALTITUDE, HOUSE_RIDGE, MAX_ALTITUDE, WORLD_RADIUS, MODEL_BASE_ROTATION };

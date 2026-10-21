@@ -1,5 +1,62 @@
 ### Specification for AI agent: Gift catching
 
+> **Third amendment, after play. Three changes, one of them a correction.**
+>
+> - **The drop is slow.** `FALL_SPEED` is `11`, not `28`, so a fall lasts 25 to
+>   50 seconds instead of 10 to 20. The clock is the score, so the fall is not
+>   a race the player runs against — it is the margin before a mistake becomes
+>   fatal, and a wide margin costs a fast player nothing. What it removes is
+>   the run that ended because a gift spawned astern while the sleigh was
+>   pointed the other way.
+> - **Each gift comes down under a handkerchief parachute**, with a blinking
+>   beacon at the top of the canopy. New module `Parachute.js`, asset-free:
+>   a displaced `PlaneGeometry` square, four `LineSegments` strings to a knot
+>   above the lid, and one additive `fog: false` bulb strobing at 1.5 Hz. The
+>   chute is what makes an 11-unit-per-second descent read as deliberate
+>   rather than as broken physics, and the strobe is now the long-range cue in
+>   its own right: `GiftBeacon.js`'s beam was removed once this landed, because
+>   a light that belongs to the gift beats a light painted under it. Consequence for the implementation:
+>   a gift is now a `THREE.Group` holding `gift.box` (the cloned model, with
+>   the 0.038 scale and the Z-up quarter turn) and the chute, which must not
+>   inherit either. `gift.position` is unchanged and is still the only thing
+>   any other module reads.
+> - **Only the ground loses a gift.** The fail test was `crashFloorAt`, which
+>   lifts to the treetops outside `PLANTED_RADIUS`, so a present drifting over
+>   the forest was lost 130 units up with clear air beneath it. It is
+>   `groundHeightAt` now — the same line `GiftBeacon.js` already stands its
+>   beam and its ring on, so what the player is shown and what ends the run
+>   agree. The *sleigh* still crashes against the canopy; it is a vehicle.
+>
+> `URGENCY_HEIGHT` in `GiftBeacon.js` dropped from 420 to 160 to follow the
+> slower fall: a ring that spends 38 seconds quickening is weather, not a
+> warning.
+
+> **Overruled on one point, after shipping. Read this first.**
+>
+> This document's central rule — "the gifts never land, and that is still the
+> design", and the constraint "no gift can be lost, expire, or become
+> unreachable" — **is no longer what the game does.** The theme changed from a
+> collection to a race: `Score.js` is retired, `Timer.js` counts the run, and
+> the game is how fast Santa can catch five gifts and deliver them. A gift that
+> hangs in the air indefinitely has no stake in a clock, so they fall, and one
+> reaching the ground ends the run.
+>
+> Everything else below still stands and is still implemented: five gifts, one
+> in the air at a time, `Enemies.js` as the structural pattern, the model
+> loaded once and cloned, the 3D catch test at `CATCH_RADIUS = 49`, the smile,
+> the counter, and burning the delta on init and reset.
+>
+> Two sections are superseded outright. **"Where they hang"**: gifts now spawn
+> in a band measured from the *sleigh* rather than from the origin, because
+> `WORLD_RADIUS` went from 700 to 1600 and a fixed band around the centre could
+> put a gift sixteen seconds away from a fall that lasts ten. **The `MIN_HEIGHT`
+> / 92.42 argument**: still correct about the house keep-out disc, but the fix
+> is now `PLOT_KEEPOUT = 160` in the spawn — the alternative this spec named
+> and rejected, "exclude the five plots from the spawn circle" — because a
+> falling gift passes through the keep-out band wherever it is and cannot be
+> kept above it. `BOB_AMPLITUDE` and `BOB_PERIOD` are gone; the fall is the
+> vertical motion now.
+
 > **Second revision, and this one is against shipped code.** The first draft
 > had Tode hopping under falling gifts. The second was rewritten for flight
 > while flight was still a spec, and it guessed one number wrong in a way that

@@ -1,5 +1,55 @@
 ### Specification for AI agent: The sleigh, and flight
 
+> **Amended after play: the sleigh has a boost, and `Shift` is it.**
+> `Boost.js`, the readout under the clock, and five call sites.
+>
+> The flight model below has exactly one speed, and the clock in `Timer.js` is
+> the score — so the minute a run spends crossing open country to a gift that
+> spawned 700 units away on a fresh bearing is dead time being charged to the
+> player. Hold `Shift` for **1.8× cruise** (360 units/sec) with **2.1× the
+> acceleration**, which is worth about two extra seconds of cruise on a full
+> tank.
+>
+> **The tank is the mechanic, not the speed.** It holds 2.2 seconds of thrust.
+> It refills in 9 seconds if the key is left alone — and by **half a tank the
+> instant a gift is caught**, so a present in the sack pays for the chase to
+> the next one and the fast line through a run is to spend the tank getting
+> there. Holding `Shift` on a dry tank refills nothing: letting go is the
+> price, which is what stops the whole thing degenerating into a stutter.
+> Below 15% the boost will not light at all and the gauge greys out to say so.
+>
+> **This took `Shift` off the descent**, where it was only ever an alias — `E`
+> has done the job since this spec shipped, and the mouse hint never
+> advertised anything else. `Q`/`E` are unchanged.
+>
+> The push is readable without the gauge: the lens widens by 5°, and the four
+> pullers' animation rate is no longer capped at cruise, so they dig in.
+> Nothing about landing, collision or the world bound changes — and boosting
+> low over the town is exactly as fatal as flying into it slowly, which is the
+> risk the speed is paid for with.
+
+> **Extended, after shipping, and this spec's landing survived it.** The world
+> opened up: `WORLD_RADIUS` went from 700 to 1600, `MAX_ALTITUDE` from 400 to
+> 900, and `Terrain.js` can now answer where the ground is anywhere on the map
+> — anything from -95 in the river channel to 575 on the far ridge.
+>
+> **`E` still lowers the sleigh onto the snow, and it now slides on it.**
+> `SLIDE_DRAG = 0.5` against the air's 2.2, so touching down with speed on
+> carries the sleigh about six seconds across the snowfield instead of one and
+> a half; the bank goes level on the ground; and a grounded sleigh follows the
+> surface down as well as up until `Q` lifts it off, because there is no
+> gravity on the vertical axis to bring it back otherwise.
+>
+> What the open world added is ground that is **not** snow. `isLandableAt` is
+> the generator's own `snowHere` test, so the river, the bare rock the snow
+> slid off, and the forest canopy the height field cannot see into are all
+> fatal — as are the roofs, and flying into a house below the ridge now ends
+> the run rather than stopping the sleigh dead. The flat basin out to 690 is
+> landable everywhere, which is where the town is.
+>
+> The rest of the flight model is untouched: the key table, `facingFor`, the
+> acceleration curve, the air drag, and `LIFT_SPEED = 120`.
+
 > **Rewritten.** The outline this replaces described a sleigh parked in a
 > field as a landmark, and recommended *cutting* driving: "a second movement
 > model on top of the hop queue, and a large task."
