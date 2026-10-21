@@ -55,10 +55,15 @@ import {
 import {
   initGameState,
   isRunLive,
+  isFreeRoam,
   setGodMode,
   beginRun,
   restartGame,
 } from './components/GameState.js';
+import {
+  initFreeRoam,
+  enterFreeRoam,
+} from './components/FreeRoam.js';
 import {
   initTitleScreen,
   openTitleScreen,
@@ -166,9 +171,45 @@ function setPlayerVisible(visible) {
   if (player.model) player.model.visible = visible;
 }
 
+/**
+ * Puts the world back to the top of a run: the sleigh at the start, the sack
+ * empty, nothing left in the air or standing at a door, the town twinkling
+ * rather than celebrating, and every clock's banked delta burned.
+ *
+ * Used by both ways in. A restart is the obvious one; free roam wants exactly
+ * the same thing for a different reason -- the player has come to look at the
+ * town, and the leftovers of the run they just finished are not part of it.
+ */
+function resetWorld() {
+  resetMovement(player);
+  // clearEnemies(scene);
+  resetGifts(scene, player);
+  // Every gift in the air, lying in the snow, and standing at a door.
+  resetDelivery(scene);
+  // resetScore();
+  resetTimer();
+  // A full tank, like the start of any run.
+  resetBoost();
+  // Back to twinkling. The delivered presents are the easy half of a
+  // restart to remember; this is the half that will be forgotten, because
+  // nothing visibly breaks -- the second run simply starts with the town
+  // already celebrating and the ending has nothing left to give.
+  resetChristmasLights();
+  setPlayerVisible(true);
+}
+
 // Built before `initGameState`, which hands it the "Main menu" option on the
 // Game Over screen, and shown at the bottom of this file.
-initTitleScreen({ onStart: () => restartGame() });
+initTitleScreen({
+  onStart: () => restartGame(),
+  // `hackathon/menu/free_roam/spec.md`. Not a run: see `FreeRoam.js`.
+  onFreeRoam: () => enterFreeRoam(),
+});
+
+initFreeRoam({
+  onEnter: resetWorld,
+  onExit: () => openTitleScreen(),
+});
 
 initGameState({
   onGameOver: () => setPlayerVisible(false),
@@ -190,23 +231,7 @@ initGameState({
   getTime: getElapsedText,
   // And whether that result is a record, which only the win screen asks.
   isBestRun,
-  onRestart: () => {
-    resetMovement(player);
-    // clearEnemies(scene);
-    resetGifts(scene, player);
-    // Every gift in the air, lying in the snow, and standing at a door.
-    resetDelivery(scene);
-    // resetScore();
-    resetTimer();
-    // A full tank, like the start of any run.
-    resetBoost();
-    // Back to twinkling. The delivered presents are the easy half of a
-    // restart to remember; this is the half that will be forgotten, because
-    // nothing visibly breaks -- the second run simply starts with the town
-    // already celebrating and the ending has nothing left to give.
-    resetChristmasLights();
-    setPlayerVisible(true);
-  },
+  onRestart: resetWorld,
 });
 
 // `?deliver` opens the run in the delivery phase, and brings god mode with it:
@@ -239,7 +264,20 @@ renderer.setAnimationLoop(() => {
   // played -- which is not the same question as "is it over". The title
   // screen is up before the first run and between runs, and the world has to
   // hold still behind it too.
-  if (isRunLive()) {
+  // Free roam first, because it is the cheaper question and the two can never
+  // both be true: a roam is not a run, so `isRunLive()` is false throughout
+  // one. The sleigh flies and the camera turns; the gifts, the clock and the
+  // deliveries are the three things this branch leaves out, which is the whole
+  // of `hackathon/menu/free_roam/spec.md`.
+  if (isFreeRoam()) {
+    // The town is still solid and the ground is still under him -- what is
+    // gone is the consequence, which `isCrashSafe()` in `GameState.js` owns.
+    updateMovement(player, [], houses);
+    // Nothing to point at, and said every frame rather than once on entry:
+    // this is also what keeps the beacon's own clock from banking the length
+    // of the roam and spending it on the first frame of the next run.
+    updateGiftBeacon(null, player);
+  } else if (isRunLive()) {
     // First, so every system this frame scales off the same score.
     updateDifficulty();
     // `houses` is live again, and fatal: below the ridge, flying into one ends

@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { isPositionFree } from './Collision.js';
 import { getCameraYaw } from './Camera.js';
-import { isGameOver, isGodMode, triggerGameOver } from './GameState.js';
+import { isGameOver, isCrashSafe, triggerGameOver } from './GameState.js';
 import { crashFloorAt, isLandableAt, landingSurfaceAt } from './Terrain.js';
 import { updateBoost, boostThrust, BOOST_MULTIPLIER } from './Boost.js';
 
@@ -393,10 +393,10 @@ function moveHorizontally(player, direction, delta, obstacles) {
     // invisible wall around each house was the last thing in the flight model
     // still treating the sleigh as a character that could be blocked.
     //
-    // God mode keeps the old behaviour rather than getting a free pass through
-    // the wall, because the point of god mode is to fly around and look at the
-    // scenery, and passing through a roof is not looking at it.
-    if (isGodMode()) {
+    // God mode and free roam keep the old behaviour rather than getting a free
+    // pass through the wall, because the point of both is to fly around and
+    // look at the scenery, and passing through a roof is not looking at it.
+    if (isCrashSafe()) {
       velocity.set(0, 0);
       return;
     }
@@ -533,7 +533,7 @@ export function updateMovement(player, enemies = [], obstacles = []) {
   if (onTheSnow || altitude <= floor) {
     player.position.z = floor;
 
-    if (landableUnder(player, obstacles) || isGodMode()) {
+    if (landableUnder(player, obstacles) || isCrashSafe()) {
       // Down on the snow, and staying there until Q lifts it off again. The
       // horizontal velocity is untouched: the runners keep whatever speed
       // arrived, and SLIDE_DRAG takes it away slowly.

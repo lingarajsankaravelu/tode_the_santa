@@ -68,6 +68,15 @@ let won = false;
 // before the player had pressed anything.
 let started = false;
 let godMode = new URLSearchParams(window.location.search).has(GOD_MODE_PARAM);
+// Free roam: the player is out looking at the town rather than playing a run.
+// `FreeRoam.js` owns the screen and the way out of it; what lives here is the
+// flag, because this module owns what state the world is in and is the one
+// `Movement.js` can read without an import cycle.
+//
+// It is NOT a run: `started` stays false, so `isRunLive()` is false, the
+// gifts, the clock and the deliveries are never updated, and `triggerGameOver`
+// has already returned by the time god mode would have been asked about.
+let freeRoam = false;
 let handlers = {};
 
 function showOverlay(visible) {
@@ -84,6 +93,47 @@ function showBadge(visible) {
 
 export function isGodMode() {
   return godMode;
+}
+
+/** Whether the player is free roaming. Read by main.js's loop. */
+export function isFreeRoam() {
+  return freeRoam;
+}
+
+/**
+ * Enters or leaves free roam. Called only by `FreeRoam.js`.
+ *
+ * Entering clears the run that ended, and that is not tidiness: "Main menu"
+ * leaves `gameOver` standing on purpose, so the world stays frozen behind the
+ * title screen -- and `updateMovement` returns early while it is set, so a
+ * roam entered after a crash would be a sleigh that could not be flown.
+ * Leaving does not put it back: the player is being handed the title screen,
+ * and a frozen world is what `started` being false already gives.
+ */
+export function setFreeRoam(enabled) {
+  freeRoam = enabled;
+
+  if (!enabled) return;
+
+  gameOver = false;
+  won = false;
+}
+
+/**
+ * Whether flying into something is survivable.
+ *
+ * The question `Movement.js` actually has at its two crash sites, and it has
+ * two answers for the same reason: god mode is "this run cannot end", and
+ * free roam is a sightseeing flight that has no run to end. Both want the
+ * same behaviour -- the sleigh stops against a wall instead of being allowed
+ * through it, and rests on ground that would otherwise be fatal.
+ *
+ * Distinct from `isGodMode()`, which is still what the badge and the G key
+ * are about: free roam does not switch god mode on, and leaving free roam
+ * must not switch it off under a player who asked for it.
+ */
+export function isCrashSafe() {
+  return godMode || freeRoam;
 }
 
 /**

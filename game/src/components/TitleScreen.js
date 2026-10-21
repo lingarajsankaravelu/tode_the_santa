@@ -160,8 +160,8 @@ function createTode() {
   return corner;
 }
 
-export function initTitleScreen({ onStart }) {
-  handlers = { onStart };
+export function initTitleScreen({ onStart, onFreeRoam }) {
+  handlers = { onStart, onFreeRoam };
 
   screenElement = document.createElement('div');
   screenElement.className = SCREEN_CLASS;
@@ -179,20 +179,33 @@ export function initTitleScreen({ onStart }) {
   centre.className = 'title-centre';
   centre.innerHTML = `<h1>${TITLE}</h1><p class="tagline">${TAGLINE}</p>`;
 
-  menu = createMenu([{ label: 'Start game', run: () => start() }]);
+  menu = createMenu([
+    { label: 'Start game', run: () => start() },
+    // `hackathon/menu/free_roam/spec.md`. Second, not first: the run is what
+    // the game is, and a sightseeing flight is the thing you choose instead.
+    { label: 'Free Roam', run: () => leave(handlers.onFreeRoam) },
+  ]);
   centre.appendChild(menu.element);
   screenElement.appendChild(centre);
 
   document.body.appendChild(screenElement);
 }
 
-function start() {
+/**
+ * Takes the screen down and hands over to whatever was chosen.
+ *
+ * The keyboard goes with it, and each option's handler is what lets go:
+ * `restartGame` for a run, `enterFreeRoam` for the roam. Both also burn every
+ * clock's banked delta -- without which whichever one was chosen would open
+ * having already spent however long the player spent reading this screen.
+ */
+function leave(run) {
   screenElement.classList.remove(VISIBLE_CLASS);
-  // Hands the keyboard back by starting the run: `restartGame` is what clears
-  // the menu, and it is also what burns every clock's banked delta -- without
-  // which the run would open having already spent however long the player
-  // spent reading this screen.
-  handlers.onStart();
+  run();
+}
+
+function start() {
+  leave(handlers.onStart);
 }
 
 /**

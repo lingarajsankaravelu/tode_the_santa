@@ -845,3 +845,81 @@ body {
   margin-top: 10px;
   letter-spacing: 1px;
 }
+
+/* ---------------------------------------------------------------------------
+   Free roam -- `hackathon/menu/free_roam/spec.md`.
+
+   One banner saying where the player is and how to leave, and the rule that
+   turns off the readouts belonging to the run that is not happening.
+   --------------------------------------------------------------------------- */
+.free-roam {
+  /* Top centre, in the slot the clock would have had: it is the one line on
+     screen that says what this flight is, and the clock is off while it is
+     up, so nothing is being covered. Kept in the DOM and toggled like every
+     other screen here. */
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  font-family: system-ui, sans-serif;
+  text-align: center;
+  color: #ffffff;
+  user-select: none;
+  /* The canvas underneath needs its clicks for pointer lock. */
+  pointer-events: none;
+}
+
+.free-roam.visible {
+  display: block;
+}
+
+.free-roam h2 {
+  /* Smaller than the clock it replaces -- 20px against 32 -- because it is a
+     label read once rather than a number watched all run. In the aurora's
+     green, which is the only palette colour here not already spoken for by a
+     gift, a doorstep or a warning. */
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #3cf0a0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.free-roam-blurb {
+  margin: 4px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.free-roam-exit {
+  /* The way out, in the gold every other key cue uses -- the delivery hint's
+     and the Game Over reason line's -- so "press this" reads the same colour
+     wherever it appears. */
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #ffd964;
+}
+
+/* The three readouts that are about a run: the clock, the record it is being
+   chased against, and the objective. There is no run, so there is nothing for
+   them to say -- and the spec asks for the town without the gifts, the timer
+   and the score, which in HUD terms is this rule.
+
+   The boost gauge is deliberately NOT here: the push is still flown out
+   here, and the tank refills on its own without a catch to pay for it.
+
+   One rule rather than a `setVisible` in each of those three modules, none of
+   which should have to learn that this screen exists. */
+body.free-roaming .run-time,
+body.free-roaming .best-time,
+body.free-roaming .gift-count {
+  display: none;
+}
