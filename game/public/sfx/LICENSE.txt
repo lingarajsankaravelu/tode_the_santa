@@ -1,0 +1,20 @@
+Sound effects by Kenney (https://kenney.nl), from the "Digital Audio" pack:
+https://kenney.nl/assets/digital-audio
+
+Licensed Creative Commons Zero (CC0 1.0, public domain dedication):
+http://creativecommons.org/publicdomain/zero/1.0/
+
+No attribution is required; this file is here because knowing where an asset
+came from is worth more than the twelve lines it costs.
+
+Original filenames, for anyone who wants to swap in a sibling from the pack:
+
+  catch.wav    <- powerUp7.ogg    (rising arpeggio, 0.29s)
+  deliver.wav  <- pepSound1.ogg   (falling blip, 0.33s)
+  boost.wav    <- phaseJump2.ogg  (rising whoosh, 0.32s)
+
+Decoded to mono 16-bit 44.1kHz WAV because Safari decodes no Ogg Vorbis, then
+trimmed to the audible part with 4ms fades at each end.
+
+All three are from the same pack, recorded on one KORG microKORG, which is
+why they sound like one set rather than three found sounds.
