@@ -44,15 +44,23 @@ is **700**.
 | Story beat | Asset | Size (own units) | Tris | Status |
 |---|---|---|---|---|
 | Tode is Santa | `tode.glb` + `SantaSuit.js` | 1.00 × 0.63 × 0.76 | 10,740 | Stopgap. Real asset specced in `skeleton/tode_the_santa/appearance` |
-| The vehicle — and the player, for the whole game | `snow_sleigh.glb` | 4.64 × 1.55 × 1.67 | 99,163 | ✅ rigged. The `run` clip animates its **four humanoid riders**, not the sleigh, and they are kept |
+| The vehicle — and the player, for the whole game | `snow_sleigh.glb` | 4.64 × 1.55 × 1.67 | 99,163 | ✅ **flying**, at `SLEIGH_SCALE = 16`. The `run` clip animates its **four humanoid riders**, not the sleigh, and they are kept |
 | Gifts flying in the air, and placed at a door | `a_gift_box.glb` | 225 × 293 × 225 | 123,440 | ✅ |
-| Carrying the gifts back | `christmas_gift_sack.glb` | 2.34 × 2.36 × 2.57 | 14,201 | ✅ |
-| The sack once delivered | `empty_christmas_sack.glb` | 2.34 × 2.29 × 2.57 | 2,816 | ✅ same size as the full one, so it is a straight swap |
+| Carrying the gifts back | `christmas_gift_sack.glb` | 2.2821 × 2.2818 × 2.2883 | 14,201 | ✅ |
+| The sack once delivered | `empty_christmas_sack.glb` | 1.5647 × 1.7185 × 1.5298 | 2,816 | ✅ aboard the sleigh as `player.sack`. **Not** the same size as the full one |
 | The five houses | `winter_country_house.glb` | — | — | ✅ already placed, `HOUSE_COUNT = 5` |
 | The field they stand in | `river_landscape.glb` | — | — | ✅ already placed |
 | — | `airport.glb` | 3000 × 11 × 1577 | 1,300 | ⚠️ nothing in the story uses it |
 | — | `airport_airplane.glb` | 40.3 × 13.6 × 50.5 | 17,712 | ⚠️ nothing in the story uses it |
 | — | `enemy.glb` | — | 3,200 | Unwired. No monsters in this story |
+
+Two rows of this table were wrong until recently, both in the same way, and
+the correction is worth keeping in sight because the table's own header
+warns about exactly it. The two sacks were listed as 2.34 × 2.36 × 2.57 and
+2.34 × 2.29 × 2.57 — "the same size, so it is a straight swap" — and those
+were raw accessor numbers. Walked properly, the full sack is **46% wider and
+33% taller** than the empty one. Everything built on "a straight swap" has to
+re-stand the replacement by its own box.
 
 #### Three things this table raises
 
