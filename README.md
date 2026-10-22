@@ -11,6 +11,10 @@
   <a href="https://threejs.org/">three.js</a> · <a href="https://vite.dev/">Vite</a>
 </p>
 
+<p align="center">
+  <a href="https://lingarajsankaravelu.github.io/tode_the_santa/"><strong>▶ Play it in your browser</strong></a>
+</p>
+
 ---
 
 ## About
@@ -50,6 +54,11 @@ Then open the printed URL — the title screen comes up with **Start game**,
 npm run build     # production bundle into dist/
 npm run preview   # serve that bundle locally
 ```
+
+Every push to `main` that touches `game/` builds that bundle and publishes it
+to [GitHub Pages](https://lingarajsankaravelu.github.io/tode_the_santa/) —
+see [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). Only
+`game/` is deployed; the course folders are not part of the site.
 
 ## Controls
 
@@ -96,6 +105,7 @@ the course scaffolding, kept as it shipped.
 │   │   ├── main.js             the loop that wires every system together
 │   │   ├── components/         one module per system (flight, camera,
 │   │   │                       gifts, delivery, boost, timer, menus…)
+│   │   ├── assets.js           resolves runtime asset URLs against the deploy
 │   │   └── style.css           HUD, title screen and menu styling
 │   ├── public/
 │   │   ├── models/             glTF models (sleigh, houses, gifts, Tode)
@@ -110,6 +120,7 @@ the course scaffolding, kept as it shipped.
 │   ├── screenshots/        the images in this README
 │   ├── tools/              one-off asset scripts (model conversion)
 │   ├── dist/               build output from `npm run build`
+│   ├── vite.config.js      build config; sets the base path for Pages
 │   └── package.json        three.js + Vite; the game's own dependencies
 │
 ├── Introduction/           ← course lessons, as JetBrains ships them
@@ -117,6 +128,8 @@ the course scaffolding, kept as it shipped.
 ├── Core_loop/                start/play/game-over, score, difficulty
 ├── Visual/                   the game world
 ├── Conclusion/               summary
+│
+├── .github/workflows/      ← builds game/ and publishes it to Pages
 │
 ├── course-info.yaml        ← course plumbing, not used by the game
 ├── course-remote-info.yaml
