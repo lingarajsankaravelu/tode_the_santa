@@ -55,10 +55,21 @@ npm run build     # production bundle into dist/
 npm run preview   # serve that bundle locally
 ```
 
-Every push to `main` that touches `game/` builds that bundle and publishes it
-to [GitHub Pages](https://lingarajsankaravelu.github.io/tode_the_santa/) —
-see [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). Only
-`game/` is deployed; the course folders are not part of the site.
+## Game deployment
+
+The game is online at
+**[lingarajsankaravelu.github.io/tode_the_santa](https://lingarajsankaravelu.github.io/tode_the_santa/)**,
+hosted free on GitHub Pages. There is nothing to install and nothing to run —
+it loads in the browser like any web page, and any number of people can play
+at the same time.
+
+Putting it there is automatic. Push a change to `main`, and if it touched
+`game/`, GitHub builds the game and puts the new version online a minute or
+two later. The steps are in
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+Only `game/` is published. The course lessons stay in the repository and never
+become part of the site.
 
 ## Controls
 
