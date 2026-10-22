@@ -28,6 +28,7 @@
 // the still it would settle into, which is the half the spec draws.
 import { createMenu, openMenu } from './Menu.js';
 import { openControls } from './Controls.js';
+import { asset } from '../assets.js';
 
 const SCREEN_CLASS = 'title-screen';
 const VISIBLE_CLASS = 'visible';
@@ -155,7 +156,7 @@ function createTode() {
   // face full of morph targets.
   corner.innerHTML =
     `<div class="title-sleigh">${SLEIGH_SVG}</div>` +
-    '<img class="title-portrait" src="/tode-title.svg" alt="Tode the Santa" />' +
+    `<img class="title-portrait" src="${asset('tode-title.svg')}" alt="Tode the Santa" />` +
     '<span class="title-tear"></span>';
 
   return corner;

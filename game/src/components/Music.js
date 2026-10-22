@@ -8,7 +8,9 @@
 // paying for a spatialisation that should never be heard. The browser's own
 // element loops a file at a fixed volume, which is the entire requirement.
 
-const TRACK_PATH = '/music/game_theme_trimmed.wav';
+import { asset } from '../assets.js';
+
+const TRACK_PATH = asset('music/game_theme_trimmed.wav');
 
 // Well below full. A short loop running under everything should sit behind the
 // game, and there is no mixer to balance it against anything else.
