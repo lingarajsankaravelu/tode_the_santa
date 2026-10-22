@@ -11,6 +11,10 @@
   <a href="https://threejs.org/">three.js</a> · <a href="https://vite.dev/">Vite</a>
 </p>
 
+<p align="center">
+  <strong>▶ <a href="https://lingarajsankaravelu.github.io/tode_the_santa/">Play the game here</a></strong>
+</p>
+
 ---
 
 ## About
@@ -50,6 +54,22 @@ Then open the printed URL — the title screen comes up with **Start game**,
 npm run build     # production bundle into dist/
 npm run preview   # serve that bundle locally
 ```
+
+## Game deployment
+
+The game is online at
+**[lingarajsankaravelu.github.io/tode_the_santa](https://lingarajsankaravelu.github.io/tode_the_santa/)**,
+hosted free on GitHub Pages. There is nothing to install and nothing to run —
+it loads in the browser like any web page, and any number of people can play
+at the same time.
+
+Putting it there is automatic. Push a change to `main`, and if it touched
+`game/`, GitHub builds the game and puts the new version online a minute or
+two later. The steps are in
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+Only `game/` is published. The course lessons stay in the repository and never
+become part of the site.
 
 ## Controls
 
@@ -96,6 +116,7 @@ the course scaffolding, kept as it shipped.
 │   │   ├── main.js             the loop that wires every system together
 │   │   ├── components/         one module per system (flight, camera,
 │   │   │                       gifts, delivery, boost, timer, menus…)
+│   │   ├── assets.js           resolves runtime asset URLs against the deploy
 │   │   └── style.css           HUD, title screen and menu styling
 │   ├── public/
 │   │   ├── models/             glTF models (sleigh, houses, gifts, Tode)
@@ -110,6 +131,7 @@ the course scaffolding, kept as it shipped.
 │   ├── screenshots/        the images in this README
 │   ├── tools/              one-off asset scripts (model conversion)
 │   ├── dist/               build output from `npm run build`
+│   ├── vite.config.js      build config; sets the base path for Pages
 │   └── package.json        three.js + Vite; the game's own dependencies
 │
 ├── Introduction/           ← course lessons, as JetBrains ships them
@@ -117,6 +139,8 @@ the course scaffolding, kept as it shipped.
 ├── Core_loop/                start/play/game-over, score, difficulty
 ├── Visual/                   the game world
 ├── Conclusion/               summary
+│
+├── .github/workflows/      ← builds game/ and publishes it to Pages
 │
 ├── course-info.yaml        ← course plumbing, not used by the game
 ├── course-remote-info.yaml

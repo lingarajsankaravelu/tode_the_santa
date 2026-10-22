@@ -4,22 +4,23 @@ import { createAnimator } from './Animation.js';
 import { createSantaSuit } from './SantaSuit.js';
 import { createSleighLights } from './SleighLights.js';
 import { START_ALTITUDE, MODEL_BASE_ROTATION } from './Movement.js';
+import { asset } from '../assets.js';
 
 // The player is the sleigh. Tode rides in it, and the hop is gone -- see
 // `hackathon/skeleton/sleigh/spec.md`.
-const SLEIGH_PATH = '/models/snow_sleigh.glb';
-const TODE_PATH = '/models/tode.glb';
+const SLEIGH_PATH = asset('models/snow_sleigh.glb');
+const TODE_PATH = asset('models/tode.glb');
 // The EMPTY one, and that is the story rather than a placeholder: the storm
 // took the gifts before the game starts, so the sack is empty until Tode
 // catches them back. `christmas_gift_sack.glb` is its full counterpart: the
 // fifth catch fills it and `core_loop/gift_delivery/spec.md` empties it again,
 // both through `setSackFull` below.
-const SACK_PATH = '/models/empty_christmas_sack.glb';
+const SACK_PATH = asset('models/empty_christmas_sack.glb');
 // Its full counterpart, loaded alongside it rather than fetched at the moment
 // of the swap: `core_loop/gift_catch/spec.md` fills the sack on the fifth
 // catch, and a 2 MB load starting on that frame would hitch exactly as the
 // game hands out its reward. Both sacks ride the carriage and one is visible.
-const FULL_SACK_PATH = '/models/christmas_gift_sack.glb';
+const FULL_SACK_PATH = asset('models/christmas_gift_sack.glb');
 
 // The file is 4.638 x 1.552 x 1.669 in its own units, so this makes it
 // 74.2 long x 24.8 tall x 26.7 wide, of which the carriage is 31.3 x 20.0 x

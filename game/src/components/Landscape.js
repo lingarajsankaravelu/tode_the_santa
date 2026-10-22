@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { asset } from '../assets.js';
 
-const MODEL_PATH = '/models/river_landscape.glb';
+const MODEL_PATH = asset('models/river_landscape.glb');
 // The model's flat middle has a radius of 17 in its own units, so 41 puts
 // that edge at 707 -- the bound Movement.js holds Tode inside. Sized to the
 // camera, not to the old floor: Camera.js can see about 2500 units out, and

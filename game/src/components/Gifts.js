@@ -28,8 +28,9 @@ import { houses } from './House.js';
 import { play } from './Sound.js';
 import { createParachute, updateParachute } from './Parachute.js';
 import { refillBoost } from './Boost.js';
+import { asset } from '../assets.js';
 
-const MODEL_PATH = '/models/a_gift_box.glb';
+const MODEL_PATH = asset('models/a_gift_box.glb');
 // The file is 225 x 293.29 x 225 in its own units with Y up, so this makes a
 // present 8.55 wide x 11.15 tall x 8.55 deep in world units. Judged against
 // the 74-unit sleigh rather than the 16-unit frog Tode used to be, and it has

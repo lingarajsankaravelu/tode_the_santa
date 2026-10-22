@@ -3,8 +3,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createChristmasLights } from './ChristmasLights.js';
 import { createSmokePlume } from './Smoke.js';
 import { createWreath } from './Wreath.js';
+import { asset } from '../assets.js';
 
-const MODEL_PATH = '/models/winter_country_house.glb';
+const MODEL_PATH = asset('models/winter_country_house.glb');
 // The House group inside the model is 10.85 units tall, so this puts it at
 // 80.3 world units -- the height small_house.glb had at its own scale of 65.
 // That number is the anchor everything else is sized against: an 80-unit house

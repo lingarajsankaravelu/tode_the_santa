@@ -32,6 +32,7 @@
 // panning the catch chime against the camera would be a spatialisation nobody
 // asked to hear.
 import { isMuted } from './Music.js';
+import { asset } from '../assets.js';
 
 /**
  * A cue is one file and the level it plays at.
@@ -46,20 +47,20 @@ const CUES = {
   // powerUp7: a short rising arpeggio, bright, with its energy up around
   // 3-4 kHz where the theme has almost none -- which is why it cuts through
   // without being loud. A present snatched out of the storm.
-  catch: { path: '/sfx/catch.wav', gain: 0.9 },
+  catch: { path: asset('sfx/catch.wav'), gain: 0.9 },
   // pepSound1: the same synth, falling instead of rising. Something set down
   // rather than picked up, and the inverse of the catch on purpose -- the two
   // events are the two halves of the run and they should answer each other.
   // Equally loud, though: the delivery is not the lesser event, and when this
   // was a quieter, duller cue the second half of the run sounded like a worse
   // version of the first.
-  deliver: { path: '/sfx/deliver.wav', gain: 0.9 },
+  deliver: { path: asset('sfx/deliver.wav'), gain: 0.9 },
   // phaseJump2: a rising whoosh, rougher and lower than the other two, which
   // is right for the one cue that is a machine doing something rather than a
   // reward being handed over. Trimmed well down because it fires whenever the
   // player reaches for speed -- far more often than five times a run -- and a
   // cue heard that often has to sit under the music rather than on top of it.
-  boost: { path: '/sfx/boost.wav', gain: 0.35 },
+  boost: { path: asset('sfx/boost.wav'), gain: 0.35 },
 };
 
 // Created on the first cue rather than at init. A context built before the

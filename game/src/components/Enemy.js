@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { asset } from '../assets.js';
 
-const MODEL_PATH = '/models/enemy.glb';
+const MODEL_PATH = asset('models/enemy.glb');
 const MODEL_SCALE = 5;
 
 const loader = new GLTFLoader();

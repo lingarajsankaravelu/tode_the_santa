@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createBulbTexture } from './ChristmasLights.js';
+import { asset } from '../assets.js';
 
 // The airfield at the back of the valley: a strip of tarmac with runway
 // lights, a beacon on a mast, and a light aircraft parked up for the night.
@@ -16,8 +17,8 @@ import { createBulbTexture } from './ChristmasLights.js';
 // nothing in Collision.js or Movement.js hears about it. Tode can fly straight
 // through the parked plane, which is the same deal the conifers already offer.
 
-const MODEL_PATH = '/models/airport.glb';
-const PLANE_PATH = '/models/airport_airplane.glb';
+const MODEL_PATH = asset('models/airport.glb');
+const PLANE_PATH = asset('models/airport_airplane.glb');
 
 // ---------------------------------------------------------------------------
 // The model, in its own units. Everything below is measured off the loaded

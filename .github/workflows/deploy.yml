@@ -1,0 +1,76 @@
+# Publishes the game to GitHub Pages.
+#
+# Only `game/` is deployed. This repository is a JetBrains course with a game
+# built inside it, so most of what is checked in -- the lesson folders, the
+# course's Jest harness, the IDE run configuration -- is not part of the game
+# and has no business in the bundle. Vite is pointed at `game/`, reads only
+# `game/index.html`, `game/src/` and `game/public/`, and writes `game/dist/`;
+# that directory, and nothing else, is what gets uploaded.
+name: Deploy game
+
+on:
+  push:
+    branches: [main]
+    # Editing a lesson, the README or the course config does not change the
+    # game, so it should not spend an Actions run or republish the site.
+    paths:
+      - 'game/**'
+      - '.github/workflows/deploy.yml'
+  # So the site can be republished by hand without an empty commit -- useful
+  # the first time, when Pages is switched on after this file has already
+  # landed on main.
+  workflow_dispatch:
+
+# The three permissions `deploy-pages` needs: read the repo, write the site,
+# and mint the OIDC token Pages uses to prove the deployment came from here.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. `cancel-in-progress: false` because a half-applied
+# deploy is worse than a slow one -- queued runs wait rather than killing a
+# publish that is already underway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: game
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Vite 7 needs 20.19+ or 22.12+; 22 is the current LTS.
+          node-version: 22
+          cache: npm
+          # The game keeps its own lockfile. The one at the repository root
+          # belongs to the course's test harness and must not be used here.
+          cache-dependency-path: game/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # Relative to the workspace, not to `working-directory` -- that only
+          # applies to `run` steps.
+          path: game/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
