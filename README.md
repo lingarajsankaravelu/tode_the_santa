@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://lingarajsankaravelu.github.io/tode_the_santa/"><strong>▶ Play it in your browser</strong></a>
+  <strong>▶ <a href="https://lingarajsankaravelu.github.io/tode_the_santa/">Play the game here</a></strong>
 </p>
 
 ---
