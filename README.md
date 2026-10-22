@@ -4,8 +4,6 @@
 
 <h1 align="center">Tode the Santa</h1>
 
-<p align="center"><em>The storm took the presents. Catch five, deliver five.</em></p>
-
 <p align="center">
   Built for the JetBrains <strong>Build a Game with an AI Coding Agent</strong> hackathon ·
   <a href="https://threejs.org/">three.js</a> · <a href="https://vite.dev/">Vite</a>
@@ -19,19 +17,24 @@
 
 ## About
 
-Tode the frog is Santa this Christmas. A storm tore the gifts out of his sleigh
-and they are still up there, turning in the wind — so he flies after them.
+🐸 The storm took the presents. Someone has to get them back.
+
+Glide Tode the Santa across an open snowy valley under the northern lights,
+catch every gift, and drop them on five doorsteps until the town lights up. ✨
+
+No combat, no score. Race the clock if you like, or just wander in Free Roam.
 
 A run is two halves:
 
-1. **Catch five gifts.** They drift over a snowed-in valley. Fly through one and
-   it goes in the sack.
+1. **Catch five gifts.** They drift over the valley, turning in the wind. Fly
+   through one and it goes in the sack.
 2. **Deliver five gifts.** Five houses stand in the field below. Pass over each
    one and drop a present on its doorstep.
 
-Do both and the town lights come on. There is no combat and no score — just a
-clock, so the only thing to beat is your own best run. A **Free Roam** mode is
-there if you'd rather just fly around and look at the place.
+Do both and the town lights come on. The only thing to beat is your own best
+time. If you crash, you just restart and fly again. **Free Roam** has no
+presents, no clock and no way to crash, so you can fly around and look at the
+place.
 
 Everything runs in the browser on plain three.js: no engine, no physics library,
 no framework. Each system lives in its own module under `game/src/components/` —
@@ -178,3 +181,7 @@ folder per task (`core_loop/gift_catch`, `core_loop/gift_delivery`,
 - 3D models — `game/public/models/`, loaded as glTF.
 - Course and project scaffolding — JetBrains Academy, MIT licensed (see
   [`LICENSE`](LICENSE)).
+
+## License
+
+Licensed under [MIT](https://opensource.org/license/MIT). See [`LICENSE`](LICENSE).
