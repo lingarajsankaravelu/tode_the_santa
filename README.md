@@ -4,8 +4,6 @@
 
 <h1 align="center">Tode the Santa</h1>
 
-<p align="center"><em>The storm took the presents. Someone has to get them back.</em></p>
-
 <p align="center">
   Built for the JetBrains <strong>Build a Game with an AI Coding Agent</strong> hackathon ·
   <a href="https://threejs.org/">three.js</a> · <a href="https://vite.dev/">Vite</a>
