@@ -12,11 +12,21 @@ import { asset } from '../assets.js';
 
 const TRACK_PATH = asset('music/game_theme_trimmed.wav');
 
-// Well below full. A short loop running under everything should sit behind the
-// game, and there is no mixer to balance it against anything else.
-const VOLUME = 0.35;
+// Far below full: the theme should read as music heard from the back of the
+// room, something the player notices having heard rather than listens to. It
+// sat at 0.35 while it was opt-in, where a player who pressed M had gone
+// looking for music and wanted to hear it. Playing by default is the opposite
+// job -- nobody asked for it, so it has to be quiet enough that nobody minds.
+// Sound.js's cue levels are set against this number, so they now sit further
+// above the theme than they used to.
+const VOLUME = 0.12;
 
-// Off unless asked for, same shape as god mode's G: press M at any time.
+// On by default, and M turns it off -- the reverse of what this was, and of
+// god mode's G. Starting muted meant the theme only ever reached players who
+// found M in the controls list, which is a strange fate for the one asset that
+// sets the mood of the game; starting it quiet instead is the setting that
+// needs no discovery. The key still works at any time, so silence is one press
+// away for anyone who wants it.
 const MUTE_KEY = 'KeyM';
 const BADGE_CLASS = 'music-muted';
 const BADGE_TEXT = 'MUSIC MUTED · M to unmute';
@@ -24,7 +34,7 @@ const VISIBLE_CLASS = 'visible';
 
 let audio = null;
 let badgeElement = null;
-let muted = true;
+let muted = false;
 
 function showBadge(visible) {
   badgeElement.classList.toggle(VISIBLE_CLASS, visible);
